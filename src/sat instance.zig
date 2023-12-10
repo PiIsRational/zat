@@ -8,6 +8,8 @@ pub const SatInstance = struct {
     clauses: std.ArrayList(Clause),
     variables: []Variable,
 
+    const Self = @This();
+
     pub fn new(allocator: Allocator, clauses: std.ArrayList(Clause), variables: []Variable) SatInstance {
         return SatInstance{
             .allocator = allocator,
@@ -16,7 +18,7 @@ pub const SatInstance = struct {
         };
     }
 
-    pub fn solve(self: *SatInstance) SatResult {
+    pub fn solve(self: Self) SatResult {
         // TODO implement DPLL
         // find unary clauses and propagate
         while (self.has_unary()) {}
@@ -24,9 +26,14 @@ pub const SatInstance = struct {
         return SatResult{ .SAT = defaultResult[0..] };
     }
 
-    pub fn has_unary(self: *SatInstance) bool {
+    pub fn has_unary(self: Self) bool {
         _ = self;
         return false;
+    }
+
+    pub fn toString(self: Self, allocator: Allocator) [:0]u8 {
+        _ = allocator;
+        _ = self;
     }
 };
 
@@ -85,7 +92,7 @@ pub const Clause = struct {
                 len += Variable.TRUE.getStringLen(@intCast(literal));
             }
 
-            if (i != 0) {
+            if (i != self.literals.items.len - 1) {
                 len += 3;
             }
         }
@@ -99,7 +106,7 @@ pub const Clause = struct {
                 _ = Variable.TRUE.addToString(@intCast(literal), &index, output);
             }
 
-            if (i != 0) {
+            if (i != self.literals.items.len - 1) {
                 output[index + 0] = ' ';
                 output[index + 1] = '|';
                 output[index + 2] = ' ';

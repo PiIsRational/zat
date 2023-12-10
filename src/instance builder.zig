@@ -101,6 +101,7 @@ pub const InstanceBuilder = struct {
 
         var parsing_num = false;
         var current_num: i32 = 1;
+        var neg: i32 = 1;
         for (line.items) |character| {
             if (parsing_num and is_whitespace(character)) {
                 parsing_num = false;
@@ -113,8 +114,9 @@ pub const InstanceBuilder = struct {
                     break;
                 }
 
-                try new_clause.literals.append(current_num);
+                try new_clause.literals.append(neg * current_num);
                 current_num = 1;
+                neg = 1;
             }
 
             if (parsing_num) {
@@ -129,7 +131,13 @@ pub const InstanceBuilder = struct {
 
             if (!parsing_num and (character == '-' or is_num(character))) {
                 parsing_num = true;
-                current_num = if (character == '-') -1 else @intCast(character - '0');
+
+                if (character == '-') {
+                    neg = -1;
+                    current_num = 0;
+                } else {
+                    current_num = @intCast(character - '0');
+                }
             }
 
             if (!parsing_num and !is_whitespace(character)) {
