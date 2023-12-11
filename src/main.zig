@@ -25,14 +25,11 @@ pub fn main() !void {
     var result = instance.solve();
 
     try stdout.print("s {s}\n", .{result.toString()});
-    const solution = try result.getSolution(gpa.allocator());
 
     switch (result) {
-        .SAT => try stdout.print("v {s}\n", .{solution}),
+        .SAT => try stdout.print("v {s}\n", .{result}),
         .UNSAT => {},
     }
-
-    gpa.allocator().free(solution);
 
     switch (result) {
         .SAT => std.os.exit(SAT_EXIT),

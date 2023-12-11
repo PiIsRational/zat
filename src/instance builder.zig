@@ -61,17 +61,7 @@ pub const InstanceBuilder = struct {
         }
 
         try stdout.print("printing the clauses of the instance:\n", .{});
-        for (instance.clauses.items, 0..) |clause, i| {
-            const string = try clause.toString(self.allocator);
-            try stdout.print("({s})", .{string});
-            self.allocator.free(string);
-
-            if (i == instance.clauses.items.len - 1) {
-                try stdout.print("\n", .{});
-            } else {
-                try stdout.print(" & ", .{});
-            }
-        }
+        try stdout.print("{s}\n", .{instance});
 
         return instance;
     }
@@ -159,7 +149,7 @@ pub const InstanceBuilder = struct {
     }
 
     fn parse_p(self: *InstanceBuilder, line: std.ArrayList(u8)) !void {
-        if (!std.mem.eql(u8, line.items[0..6], "p cnf ")) {
+        if (!std.mem.eql(u8, line.items[0..6], "p cnf")) {
             return ParseError.IllegalHeader;
         }
 
