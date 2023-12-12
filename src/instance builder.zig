@@ -85,6 +85,10 @@ pub const InstanceBuilder = struct {
     }
 
     fn parse_clause(self: *InstanceBuilder, line: std.ArrayList(u8), instance: *SatInstance) !void {
+        if (instance.clauses.items.len == self.sat_type.clause_count) {
+            return;
+        }
+
         var new_clause = Clause{
             .literals = std.ArrayList(i32).init(instance.allocator),
         };
@@ -149,32 +153,57 @@ pub const InstanceBuilder = struct {
     }
 
     fn parse_p(self: *InstanceBuilder, line: std.ArrayList(u8)) !void {
-        if (!std.mem.eql(u8, line.items[0..6], "p cnf")) {
+        if (!std.mem.eql(u8, line.items[0..5], "p cnf")) {
             return ParseError.IllegalHeader;
         }
 
         var var_count: usize = undefined;
         var clause_count: usize = undefined;
-        var space_place: usize = undefined;
-        var found_space = false;
+
+        var num_start: usize = 0;
+
         var end: usize = undefined;
+        var parsing = false;
+        var parsing_var_count = true;
+
         if (line.items[line.items.len - 1] == '\r') {
             end = line.items.len - 1;
         } else {
             end = line.items.len;
         }
 
-        for (line.items[6..line.items.len], 6..) |char, i| {
-            if (char == ' ') {
-                var_count = try std.fmt.parseInt(usize, line.items[6..i], 0);
-                space_place = i;
-                found_space = true;
-            } else if (char != '\r' and !is_num(char)) {
+        for (line.items[6..end], 6..) |char, i| {
+            if (!parsing) {
+                if (is_num(char)) {
+                    parsing = true;
+                    num_start = i;
+                } else if (!is_whitespace(char)) {
+                    return ParseError.UnexpectedCharacter;
+                }
+            } else if (parsing and is_whitespace(char)) {
+                if (parsing_var_count) {
+                    var_count = try std.fmt.parseInt(usize, line.items[num_start..i], 0);
+                    parsing_var_count = false;
+                } else {
+                    clause_count = try std.fmt.parseInt(usize, line.items[num_start..i], 0);
+                    break;
+                }
+                parsing = false;
+            } else if (parsing and !is_num(char)) {
                 return ParseError.NotaDigit;
+            }
+
+            if (parsing and i == end - 1) {
+                clause_count = try std.fmt.parseInt(usize, line.items[num_start..end], 0);
+                if (parsing_var_count) {
+                    return ParseError.UnknownFormat;
+                }
             }
         }
 
-        clause_count = try std.fmt.parseInt(usize, line.items[(space_place + 1)..end], 0);
+        if (parsing_var_count) {
+            return ParseError.UnknownFormat;
+        }
 
         self.sat_type = SatData{
             .variable_count = var_count,
@@ -183,6 +212,7 @@ pub const InstanceBuilder = struct {
     }
 
     const ParseError = error{
+        UnknownFormat,
         IllegalClauseCount,
         UnexpectedCharacter,
         NonExistingVariableRef,
