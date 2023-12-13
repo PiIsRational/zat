@@ -1,7 +1,7 @@
 const Allocator = std.mem.Allocator;
 const SatInstance = @import("sat instance.zig").SatInstance;
 const Clause = @import("sat instance.zig").Clause;
-const VarState = @import("sat instance.zig").Variable;
+const Variable = @import("sat instance.zig").Variable;
 const Helper = @import("helper.zig");
 
 const std = @import("std");
@@ -26,11 +26,7 @@ pub const InstanceBuilder = struct {
             .clause_num = 0,
         };
 
-        var instance = SatInstance{
-            .allocator = allocator,
-            .clauses = std.ArrayList(Clause).init(allocator),
-            .variables = try allocator.alloc(VarState, 0),
-        };
+        var instance = SatInstance.new(allocator, try allocator.alloc(Variable, 0));
 
         while (index < characters) {
             switch (buffer[index]) {
@@ -73,7 +69,7 @@ pub const InstanceBuilder = struct {
             'p' => {
                 try self.parse_p(line);
                 instance.allocator.free(instance.variables);
-                instance.variables = try instance.allocator.alloc(VarState, self.sat_type.variable_count);
+                instance.variables = try instance.allocator.alloc(Variable, self.sat_type.variable_count);
 
                 try stdout.print(
                     "c Parsed a SAT instance with {d} variables and {d} clauses.\n",

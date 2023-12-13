@@ -22,7 +22,7 @@ pub fn main() !void {
 
     try stdout.print("c FILE: {s}\n", .{args[1]});
     var instance = try InstanceBuilder.load_from_file(gpa.allocator(), args[1]);
-    var result = instance.solve();
+    var result = try instance.solve();
 
     try stdout.print("s {s}\n", .{result.toString()});
 
