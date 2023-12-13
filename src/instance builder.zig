@@ -26,7 +26,7 @@ pub const InstanceBuilder = struct {
             .clause_num = 0,
         };
 
-        var instance = SatInstance.new(allocator, try allocator.alloc(Variable, 0));
+        var instance = SatInstance.init(allocator, try allocator.alloc(Variable, 0));
 
         while (index < characters) {
             switch (buffer[index]) {
@@ -70,6 +70,7 @@ pub const InstanceBuilder = struct {
                 try self.parse_p(line);
                 instance.allocator.free(instance.variables);
                 instance.variables = try instance.allocator.alloc(Variable, self.sat_type.variable_count);
+                @memset(instance.variables, .UNASSIGNED);
 
                 try stdout.print(
                     "c Parsed a SAT instance with {d} variables and {d} clauses.\n",

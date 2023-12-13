@@ -11,7 +11,7 @@ pub const SatInstance = struct {
 
     const Self = @This();
 
-    pub fn new(allocator: Allocator, variables: []Variable) SatInstance {
+    pub fn init(allocator: Allocator, variables: []Variable) SatInstance {
         return SatInstance{
             .allocator = allocator,
             .clauses = std.ArrayList(Clause).init(allocator),
@@ -21,30 +21,32 @@ pub const SatInstance = struct {
     }
 
     pub fn solve(self: *Self) !SatResult {
-        while (true) {
-            // eliminate the pure literals
-            // all the literals that come up with only one polarity, can be set such that their clauses
-            // are all made true
-            try self.eliminatePureLiterals();
+        //while (true) {
+        // eliminate the pure literals
+        // all the literals that come up with only one polarity, can be set such that their clauses
+        // are all made true
+        try self.eliminatePureLiterals();
 
-            // find unary clauses and propagate
-            // if the return value is false there was a collision
-            if (!try self.propagateUnaries()) {
-                // try to resolve the problems
-                // if not able to resolve the instance was no solvable
-                if (!self.resolve()) {
-                    return SatResult{ .UNSAT = false };
-                }
+        // find unary clauses and propagate
+        // if the return value is false there was a collision
+        if (!try self.propagateUnaries()) {
+            // try to resolve the problems
+            // if not able to resolve the instance was no solvable
+            if (!self.resolve()) {
+                return SatResult{ .UNSAT = false };
             }
-
-            // check if every variable was already set
-            if (self.setting_order.items.len == self.variables.len) {
-                return SatResult{ .SAT = self.variables };
-            }
-
-            // if this is not the case pick the next variable to set
-            try self.chooseLiteral();
         }
+
+        // check if every variable was already set
+        if (self.setting_order.items.len == self.variables.len) {
+            return SatResult{ .SAT = self.variables };
+        }
+
+        // if this is not the case pick the next variable to set
+        try self.chooseLiteral();
+        //}
+
+        return SatResult{ .UNSAT = false };
     }
 
     fn chooseLiteral(self: *Self) !void {
@@ -54,6 +56,7 @@ pub const SatInstance = struct {
 
         for (self.variables, 0..) |variable, i| {
             if (variable != .UNASSIGNED) {
+                std.debug.print("{} is {s}\n", .{ i + 1, variable.toString() });
                 continue;
             }
 
@@ -62,7 +65,7 @@ pub const SatInstance = struct {
             for (self.clauses.items) |clause| {
                 if (!clause.isEmptyClause(self.variables)) {
                     for (clause.literals.items) |item| {
-                        if (@abs(item) == i) {
+                        if (@abs(item) - 1 == i) {
                             literal_count += 1;
 
                             if (item > 0) {
@@ -73,6 +76,7 @@ pub const SatInstance = struct {
                 }
             }
 
+            std.debug.print("lit {}, pos {}, lit b {}, pos b {}\n", .{ literal_count, positive_literals, best_count, best_positive });
             if (literal_count > best_count or literal_count == best_count and
                 max_pos_neg(literal_count, positive_literals) > max_pos_neg(best_count, best_positive))
             {
@@ -89,7 +93,7 @@ pub const SatInstance = struct {
 
         try self.setting_order.append(best_var);
 
-        std.debug.print("t assign {s}{}\n", .{ self.variables[best_var], best_var });
+        std.debug.print("t assign {s}{}\n", .{ self.variables[best_var], best_var + 1 });
     }
 
     fn max_pos_neg(count: usize, pos: usize) usize {
@@ -115,7 +119,7 @@ pub const SatInstance = struct {
                     for (clause.literals.items) |item| {
 
                         // check if we found it
-                        if (@abs(item) == i) {
+                        if (@abs(item) - 1 == i) {
 
                             // verify if it is pure
                             if (polarity == 0) {
@@ -137,7 +141,7 @@ pub const SatInstance = struct {
                     // this case would also be covered by this branch
                     .FORCE_FALSE;
 
-                std.debug.print("f assign {s}{}\n", .{ self.variables[i], i });
+                std.debug.print("f assign ll {s}{}\n", .{ self.variables[i], i + 1 });
                 try self.setting_order.append(i);
             }
         }
@@ -183,19 +187,16 @@ pub const SatInstance = struct {
 
             // set the variables
             for (vars_to_set.items) |variable| {
-                var v: usize = @abs(variable);
+                var v: usize = @abs(variable) - 1;
                 var value = if (variable < 0)
                     Variable.FORCE_FALSE
                 else
                     Variable.FORCE_TRUE;
 
-                std.debug.print("assign {}\n", .{variable});
-
-                if (self.variables[v] == value) {
+                if (self.variables[v] == Variable.UNASSIGNED) {
                     try self.setting_order.append(v);
-                } else if (self.variables[v] == Variable.UNASSIGNED) {
                     self.variables[v] = value;
-                } else {
+                } else if (self.variables[v] != value) {
                     // there was a collision
                     return false;
                 }
@@ -346,6 +347,16 @@ pub const Variable = enum(i8) {
             .FORCE_FALSE => .TEST_TRUE,
             .FORCE_TRUE => .TEST_FALSE,
             else => .UNASSIGNED,
+        };
+    }
+
+    pub fn toString(self: Self) []const u8 {
+        return switch (self) {
+            .TEST_TRUE => "TEST_TRUE",
+            .TEST_FALSE => "TEST_FALSE",
+            .FORCE_TRUE => "FORCE_TRUE",
+            .FORCE_FALSE => "FORCE_FALSE",
+            else => "UNASSIGNED",
         };
     }
 
