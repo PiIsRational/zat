@@ -21,32 +21,30 @@ pub const SatInstance = struct {
     }
 
     pub fn solve(self: *Self) !SatResult {
-        //while (true) {
-        // eliminate the pure literals
-        // all the literals that come up with only one polarity, can be set such that their clauses
-        // are all made true
-        try self.eliminatePureLiterals();
+        while (true) {
+            // eliminate the pure literals
+            // all the literals that come up with only one polarity, can be set such that their clauses
+            // are all made true
+            try self.eliminatePureLiterals();
 
-        // find unary clauses and propagate
-        // if the return value is false there was a collision
-        if (!try self.propagateUnaries()) {
-            // try to resolve the problems
-            // if not able to resolve the instance was no solvable
-            if (!self.resolve()) {
-                return SatResult{ .UNSAT = false };
+            // find unary clauses and propagate
+            // if the return value is false there was a collision
+            if (!try self.propagateUnaries()) {
+                // try to resolve the problems
+                // if not able to resolve the instance was no solvable
+                if (!self.resolve()) {
+                    return SatResult{ .UNSAT = false };
+                }
             }
+
+            // check if every variable was already set
+            if (self.setting_order.items.len == self.variables.len) {
+                return SatResult{ .SAT = self.variables };
+            }
+
+            // if this is not the case pick the next variable to set
+            try self.chooseLiteral();
         }
-
-        // check if every variable was already set
-        if (self.setting_order.items.len == self.variables.len) {
-            return SatResult{ .SAT = self.variables };
-        }
-
-        // if this is not the case pick the next variable to set
-        try self.chooseLiteral();
-        //}
-
-        return SatResult{ .UNSAT = false };
     }
 
     fn chooseLiteral(self: *Self) !void {
@@ -56,7 +54,6 @@ pub const SatInstance = struct {
 
         for (self.variables, 0..) |variable, i| {
             if (variable != .UNASSIGNED) {
-                std.debug.print("{} is {s}\n", .{ i + 1, variable.toString() });
                 continue;
             }
 
@@ -76,7 +73,6 @@ pub const SatInstance = struct {
                 }
             }
 
-            std.debug.print("lit {}, pos {}, lit b {}, pos b {}\n", .{ literal_count, positive_literals, best_count, best_positive });
             if (literal_count > best_count or literal_count == best_count and
                 max_pos_neg(literal_count, positive_literals) > max_pos_neg(best_count, best_positive))
             {
@@ -92,8 +88,6 @@ pub const SatInstance = struct {
             .TEST_FALSE;
 
         try self.setting_order.append(best_var);
-
-        std.debug.print("t assign {s}{}\n", .{ self.variables[best_var], best_var + 1 });
     }
 
     fn max_pos_neg(count: usize, pos: usize) usize {
@@ -141,7 +135,6 @@ pub const SatInstance = struct {
                     // this case would also be covered by this branch
                     .FORCE_FALSE;
 
-                std.debug.print("f assign ll {s}{}\n", .{ self.variables[i], i + 1 });
                 try self.setting_order.append(i);
             }
         }
@@ -155,11 +148,9 @@ pub const SatInstance = struct {
                 var variable = &self.variables[value];
 
                 if (variable.*.isForce()) {
-                    std.debug.print("unassign {d}\n", .{value});
                     variable.* = .UNASSIGNED;
                     _ = self.setting_order.pop();
                 } else {
-                    std.debug.print("invert {d}\n", .{value});
                     variable.*.setInverse();
                     return true;
                 }
@@ -201,6 +192,8 @@ pub const SatInstance = struct {
                     return false;
                 }
             }
+
+            vars_to_set.clearRetainingCapacity();
         }
 
         return true;

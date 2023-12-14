@@ -64,6 +64,12 @@ pub const InstanceBuilder = struct {
 
     fn parse_line(self: *InstanceBuilder, line: std.ArrayList(u8), instance: *SatInstance) !void {
         const stdout = std.io.getStdOut().writer();
+
+        if (line.items.len == 0) {
+            try self.parse_clause(line, instance);
+            return;
+        }
+
         switch (line.items[0]) {
             'c' => {},
             'p' => {
