@@ -33,18 +33,40 @@ pub const SatInstance = struct {
                 // try to resolve the problems
                 // if not able to resolve the instance was no solvable
                 if (!self.resolve()) {
-                    return SatResult{ .UNSAT = false };
+                    return SatResult{ .UNSAT = true };
                 }
             }
 
             // check if every variable was already set
             if (self.setting_order.items.len == self.variables.len) {
-                return SatResult{ .SAT = self.variables };
+                if (self.verify()) {
+                    return SatResult{ .SAT = self.variables };
+                } else if (!self.resolve()) {
+                    return SatResult{ .UNSAT = true };
+                }
             }
 
             // if this is not the case pick the next variable to set
             try self.chooseLiteral();
         }
+    }
+
+    fn verify(self: Self) bool {
+        for (self.clauses.items) |clause| {
+            var found_one: bool = false;
+            for (clause.literals.items) |literal| {
+                if (self.variables[literal.variable].isTrue()) {
+                    found_one = true;
+                    break;
+                }
+            }
+
+            if (!found_one) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     fn chooseLiteral(self: *Self) !void {
@@ -62,10 +84,10 @@ pub const SatInstance = struct {
             for (self.clauses.items) |clause| {
                 if (!clause.isEmptyClause(self.variables)) {
                     for (clause.literals.items) |item| {
-                        if (@abs(item) - 1 == i) {
+                        if (item.variable == i) {
                             literal_count += 1;
 
-                            if (item > 0) {
+                            if (!item.is_negated) {
                                 positive_literals += 1;
                             }
                         }
@@ -103,7 +125,7 @@ pub const SatInstance = struct {
                 continue;
             }
 
-            var polarity: isize = 0;
+            var polarity: ?bool = null;
             var is_pure = true;
             outer: for (self.clauses.items) |clause| {
                 // do not waste time on empty clauses
@@ -113,14 +135,16 @@ pub const SatInstance = struct {
                     for (clause.literals.items) |item| {
 
                         // check if we found it
-                        if (@abs(item) - 1 == i) {
+                        if (item.variable == i) {
 
                             // verify if it is pure
-                            if (polarity == 0) {
-                                polarity = item;
-                            } else if (polarity != item) {
-                                is_pure = false;
-                                break :outer;
+                            if (polarity) |value| {
+                                if (value != item.is_negated) {
+                                    is_pure = false;
+                                    break :outer;
+                                }
+                            } else {
+                                polarity = item.is_negated;
                             }
                         }
                     }
@@ -128,7 +152,7 @@ pub const SatInstance = struct {
             }
 
             if (is_pure) {
-                self.variables[i] = if (polarity > 0)
+                self.variables[i] = if (polarity orelse false)
                     .FORCE_TRUE
                 else
                     // potentially the case the variable is unassigned but not needed
@@ -142,7 +166,7 @@ pub const SatInstance = struct {
 
     fn resolve(self: *Self) bool {
         while (true) {
-            var lastSet = self.getLastSet();
+            var lastSet = self.setting_order.getLastOrNull();
 
             if (lastSet) |value| {
                 var variable = &self.variables[value];
@@ -161,8 +185,8 @@ pub const SatInstance = struct {
     }
 
     fn propagateUnaries(self: *Self) !bool {
-        var vars_to_set = std.ArrayList(i32).init(self.allocator);
-        var var_arg: i32 = undefined;
+        var vars_to_set = std.ArrayList(Literal).init(self.allocator);
+        var var_arg: Literal = undefined;
 
         while (true) {
             // find the variables to set
@@ -177,17 +201,16 @@ pub const SatInstance = struct {
             }
 
             // set the variables
-            for (vars_to_set.items) |variable| {
-                var v: usize = @abs(variable) - 1;
-                var value = if (variable < 0)
+            for (vars_to_set.items) |literal| {
+                var value = if (literal.is_negated)
                     Variable.FORCE_FALSE
                 else
                     Variable.FORCE_TRUE;
 
-                if (self.variables[v] == Variable.UNASSIGNED) {
-                    try self.setting_order.append(v);
-                    self.variables[v] = value;
-                } else if (self.variables[v] != value) {
+                if (self.variables[literal.variable] == Variable.UNASSIGNED) {
+                    try self.setting_order.append(literal.variable);
+                    self.variables[literal.variable] = value;
+                } else if (!self.variables[literal.variable].isEqual(value)) {
                     // there was a collision
                     return false;
                 }
@@ -215,13 +238,6 @@ pub const SatInstance = struct {
 
             try writer.print("({s})", .{clause});
         }
-    }
-
-    fn getLastSet(self: Self) ?usize {
-        return if (self.setting_order.items.len == 0)
-            null
-        else
-            self.setting_order.items[self.setting_order.items.len - 1];
     }
 };
 
@@ -268,7 +284,7 @@ pub const SatResult = union(PossibleResults) {
 };
 
 pub const Clause = struct {
-    literals: std.ArrayList(i32),
+    literals: std.ArrayList(Literal),
     const Self = @This();
 
     pub fn format(
@@ -281,7 +297,7 @@ pub const Clause = struct {
         _ = fmt;
 
         for (self.literals.items, 0..) |literal, i| {
-            try writer.print("{d}", .{literal});
+            try writer.print("{s}", .{literal});
 
             if (i != self.literals.items.len - 1) {
                 try writer.print(" | ", .{});
@@ -289,26 +305,27 @@ pub const Clause = struct {
         }
     }
 
-    pub fn isUnitClause(self: Self, variables: []Variable, variable: *i32) bool {
-        return self.setVariables(variables, variable) == 1;
+    pub fn isUnitClause(self: Self, variables: []Variable, literal: *Literal) bool {
+        return self.setVariables(variables, literal) == self.literals.items.len - 1;
     }
 
     pub fn isEmptyClause(self: Self, variables: []Variable) bool {
-        var bin: i32 = 0;
-        return self.setVariables(variables, &bin) == 0;
+        var lit = Literal{ .is_negated = false, .variable = 0 };
+        return self.setVariables(variables, &lit) == self.literals.items.len;
     }
 
-    fn setVariables(self: Self, variables: []Variable, last_set: *i32) usize {
+    fn setVariables(self: Self, variables: []Variable, last_unassigned: *Literal) usize {
         var set_items: usize = 0;
 
         for (self.literals.items) |item| {
-            if (variables[@abs(item) - 1] == Variable.UNASSIGNED) {
+            if (variables[item.variable] != Variable.UNASSIGNED) {
                 set_items += 1;
-                last_set.* = item;
+            } else {
+                last_unassigned.* = item;
             }
 
-            if (variables[@abs(item) - 1].isTrue()) {
-                return 0;
+            if (variables[item.variable].isTrue()) {
+                return self.literals.items.len;
             }
         }
 
@@ -330,7 +347,14 @@ pub const Variable = enum(i8) {
     }
 
     pub fn isTrue(self: Self) bool {
-        return self == .TEST_TRUE or self == .FORCE_TRUE;
+        return self == .TEST_FALSE or self == .FORCE_TRUE;
+    }
+
+    pub fn isEqual(self: Self, other: Self) bool {
+        const self_true = self.isTrue();
+        const other_true = other.isForce();
+
+        return self_true and other_true or !self_true and !other_true;
     }
 
     pub fn setInverse(self: *Self) void {
@@ -365,5 +389,26 @@ pub const Variable = enum(i8) {
         if (!self.isTrue()) {
             try writer.print("-", .{});
         }
+    }
+};
+
+pub const Literal = struct {
+    is_negated: bool,
+    variable: u31,
+
+    const Self = @This();
+
+    pub fn format(
+        self: Self,
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        _ = options;
+        _ = fmt;
+
+        const sign = if (self.is_negated) "-" else "";
+
+        try writer.print("{s}{}", .{ sign, self.variable + 1 });
     }
 };

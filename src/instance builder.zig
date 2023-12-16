@@ -2,6 +2,7 @@ const Allocator = std.mem.Allocator;
 const SatInstance = @import("sat instance.zig").SatInstance;
 const Clause = @import("sat instance.zig").Clause;
 const Variable = @import("sat instance.zig").Variable;
+const Literal = @import("sat instance.zig").Literal;
 const Helper = @import("helper.zig");
 
 const std = @import("std");
@@ -93,12 +94,12 @@ pub const InstanceBuilder = struct {
         }
 
         var new_clause = Clause{
-            .literals = std.ArrayList(i32).init(instance.allocator),
+            .literals = std.ArrayList(Literal).init(instance.allocator),
         };
 
         var parsing_num = false;
-        var current_num: i32 = 1;
-        var neg: i32 = 1;
+        var current_num: u31 = 1;
+        var neg: bool = false;
         for (line.items) |character| {
             if (parsing_num and is_whitespace(character)) {
                 parsing_num = false;
@@ -111,9 +112,13 @@ pub const InstanceBuilder = struct {
                     break;
                 }
 
-                try new_clause.literals.append(neg * current_num);
+                try new_clause.literals.append(Literal{
+                    .is_negated = neg,
+                    .variable = current_num - 1,
+                });
+
                 current_num = 1;
-                neg = 1;
+                neg = false;
             }
 
             if (parsing_num) {
@@ -130,7 +135,7 @@ pub const InstanceBuilder = struct {
                 parsing_num = true;
 
                 if (character == '-') {
-                    neg = -1;
+                    neg = true;
                     current_num = 0;
                 } else {
                     current_num = @intCast(character - '0');
