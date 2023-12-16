@@ -22,26 +22,29 @@ pub const SatInstance = struct {
 
     pub fn solve(self: *Self) !SatResult {
         while (true) {
+
             // eliminate the pure literals
             // all the literals that come up with only one polarity, can be set such that their clauses
             // are all made true
-            try self.eliminatePureLiterals();
+            // try self.eliminatePureLiterals();
 
             // find unary clauses and propagate
             // if the return value is false there was a collision
-            if (!try self.propagateUnaries()) {
-                // try to resolve the problems
-                // if not able to resolve the instance was no solvable
-                if (!self.resolve()) {
-                    return SatResult{ .UNSAT = true };
-                }
-            }
+            //if (!try self.propagateUnaries()) {
+            // try to resolve the problems
+            // if not able to resolve the instance was no solvable
+            //    if (!self.resolve()) {
+            //        std.debug.print("unaries\n", .{});
+            //        return SatResult{ .UNSAT = true };
+            //    }
+            //}
 
             // check if every variable was already set
             if (self.setting_order.items.len == self.variables.len) {
                 if (self.verify()) {
                     return SatResult{ .SAT = self.variables };
                 } else if (!self.resolve()) {
+                    std.debug.print("verify\n", .{});
                     return SatResult{ .UNSAT = true };
                 }
             }
@@ -49,13 +52,15 @@ pub const SatInstance = struct {
             // if this is not the case pick the next variable to set
             try self.chooseLiteral();
         }
+
+        return SatResult{ .UNSAT = true };
     }
 
     fn verify(self: Self) bool {
         for (self.clauses.items) |clause| {
             var found_one: bool = false;
             for (clause.literals.items) |literal| {
-                if (self.variables[literal.variable].isTrue()) {
+                if (self.variables[literal.variable].isTrue() != literal.is_negated) {
                     found_one = true;
                     break;
                 }
@@ -73,10 +78,16 @@ pub const SatInstance = struct {
         var best_var: usize = 0;
         var best_count: usize = 0;
         var best_positive: usize = 0;
+        var found_literal = false;
 
         for (self.variables, 0..) |variable, i| {
             if (variable != .UNASSIGNED) {
                 continue;
+            }
+
+            if (best_count == 0) {
+                best_var = i;
+                found_literal = true;
             }
 
             var literal_count: usize = 0;
@@ -104,12 +115,15 @@ pub const SatInstance = struct {
             }
         }
 
-        self.variables[best_var] = if (max_pos_neg(best_count, best_positive) == best_positive)
-            .TEST_TRUE
-        else
-            .TEST_FALSE;
+        if (found_literal) {
+            self.variables[best_var] = if (max_pos_neg(best_count, best_positive) == best_positive)
+                .TEST_TRUE
+            else
+                .TEST_FALSE;
 
-        try self.setting_order.append(best_var);
+            std.debug.print("choose {d} to be {s}\n", .{ best_var + 1, self.variables[best_var].toString() });
+            try self.setting_order.append(best_var);
+        }
     }
 
     fn max_pos_neg(count: usize, pos: usize) usize {
@@ -171,11 +185,13 @@ pub const SatInstance = struct {
             if (lastSet) |value| {
                 var variable = &self.variables[value];
 
-                if (variable.*.isForce()) {
+                if (variable.isForce()) {
+                    std.debug.print("{d} cannot be\n", .{value + 1});
                     variable.* = .UNASSIGNED;
                     _ = self.setting_order.pop();
                 } else {
-                    variable.*.setInverse();
+                    variable.setInverse();
+                    std.debug.print("{d} is {s} now\n", .{ value + 1, variable.toString() });
                     return true;
                 }
             } else {
@@ -324,7 +340,7 @@ pub const Clause = struct {
                 last_unassigned.* = item;
             }
 
-            if (variables[item.variable].isTrue()) {
+            if (variables[item.variable].isTrue() != item.is_negated) {
                 return self.literals.items.len;
             }
         }
