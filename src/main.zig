@@ -1,6 +1,11 @@
 const std = @import("std");
 const SatInstance = @import("sat instance.zig").SatInstance;
 const InstanceBuilder = @import("instance builder.zig").InstanceBuilder;
+const Literal = @import("literal.zig").Literal;
+const ClauseHeader = @import("clause header.zig").ClauseHeader;
+const Garbage = @import("mem garbage.zig").MemGarbage;
+
+const Cell = @import("mem cell.zig").MemoryCell;
 const fs = std.fs;
 const OpenError = fs.File.OpenError;
 const Allocator = std.mem.Allocator;
@@ -12,6 +17,7 @@ pub fn main() !void {
     const stdout = std.io.getStdOut().writer();
     try stdout.print("SAT solver\n", .{});
 
+    try stdout.print("cell size: {}, literal size: {}, clause header: {}, garbage: {}\n", .{ @sizeOf(Cell), @sizeOf(Literal), @sizeOf(ClauseHeader), @sizeOf(Garbage) });
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const args = try std.process.argsAlloc(gpa.allocator());
     defer std.process.argsFree(gpa.allocator(), args);

@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const Literal = struct {
+pub const Literal = packed struct {
     is_negated: bool,
     variable: u31,
 

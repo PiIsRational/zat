@@ -63,7 +63,7 @@ pub const SatInstance = struct {
     fn verify(self: Self) bool {
         for (self.clauses.items) |clause| {
             var found_one: bool = false;
-            for (clause.literals.items) |literal| {
+            for (clause.literals) |literal| {
                 if (self.variables[literal.variable].isTrue() != literal.is_negated) {
                     found_one = true;
                     break;
@@ -98,7 +98,7 @@ pub const SatInstance = struct {
             var positive_literals: usize = 0;
             for (self.clauses.items) |clause| {
                 if (!clause.isEmptyClause(self.variables)) {
-                    for (clause.literals.items) |item| {
+                    for (clause.literals) |item| {
                         if (item.variable == i) {
                             literal_count += 1;
 

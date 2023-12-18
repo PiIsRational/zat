@@ -1,8 +1,8 @@
 const Allocator = std.mem.Allocator;
 const SatInstance = @import("sat instance.zig").SatInstance;
-const Clause = @import("sat instance.zig").Clause;
-const Variable = @import("sat instance.zig").Variable;
-const Literal = @import("sat instance.zig").Literal;
+const Clause = @import("clause.zig").Clause;
+const Variable = @import("variable.zig").Variable;
+const Literal = @import("literal.zig").Literal;
 const Helper = @import("helper.zig");
 
 const std = @import("std");
@@ -89,67 +89,71 @@ pub const InstanceBuilder = struct {
     }
 
     fn parse_clause(self: *InstanceBuilder, line: std.ArrayList(u8), instance: *SatInstance) !void {
-        if (instance.clauses.items.len == self.sat_type.clause_count) {
-            return;
-        }
+        _ = instance;
+        _ = line;
+        _ = self;
+        return;
+        //if (instance.clauses.items.len == self.sat_type.clause_count) {
+        //    return;
+        //}
 
-        var new_clause = Clause{
-            .literals = std.ArrayList(Literal).init(instance.allocator),
-        };
+        //var new_clause = Clause{
+        //    .literals = std.ArrayList(Literal).init(instance.allocator),
+        //};
 
-        var parsing_num = false;
-        var current_num: u31 = 1;
-        var neg: bool = false;
-        for (line.items) |character| {
-            if (parsing_num and is_whitespace(character)) {
-                parsing_num = false;
-                if (instance.*.variables.len < current_num) {
-                    std.debug.print("found a disallowed: {d}\n", .{current_num});
-                    return ParseError.NonExistingVariableRef;
-                }
+        //var parsing_num = false;
+        //var current_num: u31 = 1;
+        //var neg: bool = false;
+        //for (line.items) |character| {
+        //    if (parsing_num and is_whitespace(character)) {
+        //        parsing_num = false;
+        //        if (instance.*.variables.len < current_num) {
+        //            std.debug.print("found a disallowed: {d}\n", .{current_num});
+        //            return ParseError.NonExistingVariableRef;
+        //        }
 
-                if (current_num == 0) {
-                    break;
-                }
+        //        if (current_num == 0) {
+        //            break;
+        //        }
 
-                try new_clause.literals.append(Literal{
-                    .is_negated = neg,
-                    .variable = current_num - 1,
-                });
+        //        try new_clause.literals.append(Literal{
+        //            .is_negated = neg,
+        //            .variable = current_num - 1,
+        //        });
 
-                current_num = 1;
-                neg = false;
-            }
+        //        current_num = 1;
+        //        neg = false;
+        //    }
 
-            if (parsing_num) {
-                if (!is_num(character)) {
-                    std.debug.print("found a disallowed: ({c})\n", .{character});
-                    return ParseError.NotaDigit;
-                }
+        //    if (parsing_num) {
+        //        if (!is_num(character)) {
+        //            std.debug.print("found a disallowed: ({c})\n", .{character});
+        //            return ParseError.NotaDigit;
+        //        }
 
-                current_num *= 10;
-                current_num += @intCast(character - '0');
-            }
+        //        current_num *= 10;
+        //        current_num += @intCast(character - '0');
+        //    }
 
-            if (!parsing_num and (character == '-' or is_num(character))) {
-                parsing_num = true;
+        //    if (!parsing_num and (character == '-' or is_num(character))) {
+        //        parsing_num = true;
 
-                if (character == '-') {
-                    neg = true;
-                    current_num = 0;
-                } else {
-                    current_num = @intCast(character - '0');
-                }
-            }
+        //        if (character == '-') {
+        //            neg = true;
+        //            current_num = 0;
+        //        } else {
+        //            current_num = @intCast(character - '0');
+        //        }
+        //    }
 
-            if (!parsing_num and !is_whitespace(character)) {
-                std.debug.print("found a disallowed: {c}\n", .{character});
-                return ParseError.UnexpectedCharacter;
-            }
-        }
+        //    if (!parsing_num and !is_whitespace(character)) {
+        //        std.debug.print("found a disallowed: {c}\n", .{character});
+        //        return ParseError.UnexpectedCharacter;
+        //    }
+        //}
 
-        try instance.clauses.append(new_clause);
-        self.clause_num += 1;
+        //try instance.clauses.append(new_clause);
+        //self.clause_num += 1;
     }
 
     fn is_whitespace(character: u8) bool {
