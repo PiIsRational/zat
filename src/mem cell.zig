@@ -1,19 +1,9 @@
 const Literal = @import("literal.zig").Literal;
-const ClauseHeader = @import("clause header.zig").ClauseHeader;
-const Garbage = @import("mem garbage.zig").MemGarbage;
-
-pub const VariableFlag = enum(u1) {
-    OTHER,
-    VARIABLE,
-};
-
-pub const GarbageFlag = enum(u1) {
-    HEADER,
-    GARBAGE,
-};
+const ClauseHeader = @import("clause.zig").ClauseHeader;
+const Garbage = @import("mem garbage.zig").GarbageHeader;
 
 pub const MemoryCell = packed union {
-    variable: Literal,
+    literal: Literal,
     header: ClauseHeader,
     garbage: Garbage,
     integer: u32,

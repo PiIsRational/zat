@@ -1,12 +1,19 @@
 const std = @import("std");
+const GarbageFlag = @import("mem cell.zig").GarbageFlag;
+const LiteralFlag = @import("mem cell.zig").LiteralFlag;
 const Literal = @import("literal.zig").Literal;
 const Variable = @import("variable.zig").Variable;
+const MemoryCell = @import("mem cell.zig").MemoryCell;
 
 /// the clause struct
 ///
-/// it has a slice pointing to literals
+/// it points to its section of the clause memory
+/// the first part of a clause is the clause header
+/// it contains the meta informations about the clause
+///
+/// after that the literals are stored in order
 pub const Clause = struct {
-    literals: []const Literal,
+    literals: [*]MemoryCell,
     const Self = @This();
 
     pub fn format(
@@ -18,39 +25,28 @@ pub const Clause = struct {
         _ = options;
         _ = fmt;
 
-        for (self.literals, 0..) |literal, i| {
+        for (self.getLiterals(), 0..) |literal, i| {
             try writer.print("{s}", .{literal});
 
-            if (i != self.literals.len - 1) {
+            if (i != self.getLength() - 1) {
                 try writer.print(" | ", .{});
             }
         }
     }
 
-    pub fn isUnitClause(self: Self, variables: []Variable, literal: *Literal) bool {
-        return self.setVariables(variables, literal) == self.literals.len - 1;
+    pub fn getLength(self: Self) usize {
+        return self.literals[0].header.len;
     }
 
-    pub fn isEmptyClause(self: Self, variables: []Variable) bool {
-        var lit = Literal{ .is_negated = false, .variable = 0 };
-        return self.setVariables(variables, &lit) == self.literals.len;
+    pub fn getLiterals(self: Self) []const Literal {
+        return @ptrCast(self.literals[1 .. self.getLength() + 1]);
     }
+};
 
-    fn setVariables(self: Self, variables: []Variable, last_unassigned: *Literal) usize {
-        var set_items: usize = 0;
+/// the clause header contains the meta-data of the clause
+pub const ClauseHeader = packed struct {
+    is_garbage: bool,
+    len: u31,
 
-        for (self.literals) |item| {
-            if (variables[item.variable] != Variable.UNASSIGNED) {
-                set_items += 1;
-            } else {
-                last_unassigned.* = item;
-            }
-
-            if (variables[item.variable].isTrue() != item.is_negated) {
-                return self.literals.len;
-            }
-        }
-
-        return set_items;
-    }
+    const Self = @This();
 };

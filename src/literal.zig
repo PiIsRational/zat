@@ -1,8 +1,9 @@
 const std = @import("std");
 
 pub const Literal = packed struct {
+    is_garbage: bool,
     is_negated: bool,
-    variable: u31,
+    variable: u30,
 
     const Self = @This();
 
