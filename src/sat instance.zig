@@ -2,6 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Variable = @import("variable.zig").Variable;
 const Clause = @import("clause.zig").Clause;
+const ClauseDb = @import("clause db.zig").ClauseDb;
 const SatResult = @import("sat_result.zig").SatResult;
 const Literal = @import("literal.zig").Literal;
 
@@ -9,8 +10,7 @@ const defaultResult = [_]Variable{ .FORCE_FALSE, .FORCE_TRUE };
 
 pub const SatInstance = struct {
     allocator: Allocator,
-    clauses: std.ArrayList(Clause),
-    setting_order: std.ArrayList(usize),
+    clauses: ClauseDb,
     variables: []Variable,
 
     const Self = @This();

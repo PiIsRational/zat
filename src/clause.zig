@@ -39,16 +39,24 @@ pub const Clause = struct {
         @memcpy(self.getLiterals(), literals);
     }
 
+    /// initializes a clause from the pointer to its header
     pub fn fromHeader(header: *ClauseHeader) Clause {
         return Clause{
             .literals = @ptrCast(header),
         };
     }
 
+    /// checks if this clause points to garbage in memory
+    pub fn isGarbage(self: Self) bool {
+        return self.literals[0].header.is_garbage;
+    }
+
+    /// getter for the amount of literals in this clause
     pub fn getLength(self: Self) usize {
         return self.literals[0].header.len;
     }
 
+    /// getter for the literals contained in this clause as a slice
     pub fn getLiterals(self: Self) []Literal {
         return @ptrCast(self.literals[1 .. self.getLength() + 1]);
     }
