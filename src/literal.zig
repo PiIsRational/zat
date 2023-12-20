@@ -7,6 +7,20 @@ pub const Literal = packed struct {
 
     const Self = @This();
 
+    /// converts a literal to an index for slices or arrays
+    pub fn toIndex(self: Self) usize {
+        return self.variable << 2 + (if (self.is_negated) 1 else 0);
+    }
+
+    /// returns the negated version of this literal
+    pub fn negated(self: Self) Self {
+        return Literal{
+            .is_garbage = false,
+            .is_negated = !self.is_negated,
+            .variable = self.variable,
+        };
+    }
+
     pub fn format(
         self: Self,
         comptime fmt: []const u8,
