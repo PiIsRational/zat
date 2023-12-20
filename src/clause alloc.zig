@@ -5,12 +5,14 @@ const Clause = @import("clause.zig").Clause;
 const ClauseHeader = @import("clause.zig").ClauseHeader;
 const MemCell = @import("mem cell.zig").MemoryCell;
 const Garbage = @import("mem garbage.zig").Garbage;
+const ClauseDb = @import("clause db.zig").ClauseDb;
 
 const STANDARD_CLAUSE_SIZES: usize = 10;
 
 /// the struct used to allocate clauses
 const ClauseAllocator = struct {
-    literals: std.ArrayList(Literal),
+    database: ClauseDb,
+    literals: std.ArrayList(MemCell),
 
     /// the list containing the freed clauses
     free_list: [STANDARD_CLAUSE_SIZES + 1]?*MemCell,
@@ -21,9 +23,11 @@ const ClauseAllocator = struct {
 
     const Self = @This();
 
-    pub fn init(allocator: Allocator) Self {
+    pub fn init(allocator: Allocator, db: ClauseDb) Self {
         return Self{
+            .database = db,
             .literals = std.ArrayList(Literal).init(allocator),
+            .fragmentation = 0,
         };
     }
 
@@ -57,7 +61,27 @@ const ClauseAllocator = struct {
     }
 
     // would be nice to have a way of defragmenting the heap
-    // pub fn defragment(self: Self, ...)
+    pub fn defragment(self: Self) void {
+        self.database.clauses.clearRetainingCapacity();
+        var old_literals = self.literals;
+        self.literals = std.ArrayList(MemCell).init(self.literals.allocator);
+
+        var i: usize = 0;
+        while (i < old_literals.items.len) : (i += 1) {
+            var current = &old_literals.items[i];
+
+            if (current.header.is_garbage) {
+                i += current.garbage.len;
+            } else {
+                const old_clause = Clause.fromHeader(current);
+                self.database.clauses.append(self.allocEnd(old_clause.getLength()));
+            }
+        }
+
+        for (self.free_list) |*value| {
+            value = null;
+        }
+    }
 
     fn allocStandard(self: Self, size: usize) Clause {
         //TODO: implement
@@ -81,6 +105,8 @@ const ClauseAllocator = struct {
             },
         });
 
+        var header = &self.literals.items.ptr[self.literals.items.len - 1];
+
         self.literals.appendNTimes(MemCell{
             .literal = Literal{
                 .is_garbage = false,
@@ -88,5 +114,7 @@ const ClauseAllocator = struct {
                 .variable = 0,
             },
         }, size);
+
+        return Clause.fromHeader(header.header);
     }
 };

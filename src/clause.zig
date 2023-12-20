@@ -34,11 +34,22 @@ pub const Clause = struct {
         }
     }
 
+    /// sets the literals of
+    pub fn setLiterals(self: *Self, literals: []Literal) void {
+        @memcpy(self.getLiterals(), literals);
+    }
+
+    pub fn fromHeader(header: *ClauseHeader) Clause {
+        return Clause{
+            .literals = @ptrCast(header),
+        };
+    }
+
     pub fn getLength(self: Self) usize {
         return self.literals[0].header.len;
     }
 
-    pub fn getLiterals(self: Self) []const Literal {
+    pub fn getLiterals(self: Self) []Literal {
         return @ptrCast(self.literals[1 .. self.getLength() + 1]);
     }
 };
