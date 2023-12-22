@@ -7,6 +7,14 @@ pub const Literal = packed struct {
 
     const Self = @This();
 
+    pub fn default() Literal {
+        return Literal{
+            .is_garbage = false,
+            .is_negated = false,
+            .variable = 0,
+        };
+    }
+
     /// converts a literal to an index for slices or arrays
     pub fn toIndex(self: Self) usize {
         return self.variable << 2 + (if (self.is_negated) 1 else 0);

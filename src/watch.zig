@@ -29,10 +29,17 @@ pub const WatchList = struct {
         }
     }
 
-    pub fn appendClause(self: *Self, clause: Clause, instance: SatInstance) void {
-        _ = instance;
-        _ = clause;
-        _ = self;
+    pub fn appendClause(self: *Self, clause: Clause, literals: [2]Literal) void {
+        for (literals, 0..1) |literal, i| {
+            self.add_watch(literal, Watch{
+                .other = literals[i ^ 1],
+                .clause = clause,
+            });
+        }
+    }
+
+    fn add_watch(self: *Self, literal: Literal, watch: Watch) void {
+        self.watches[literal.variable].append(watch);
     }
 };
 
