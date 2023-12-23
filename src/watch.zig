@@ -11,6 +11,7 @@ pub const WatchList = struct {
     const Self = @This();
 
     /// init creates a new watchlist and initializes it
+    ///
     /// the initialization does go through each clause and supposes that no variable in the clause is assigned
     pub fn init(variables: usize, allocator: Allocator, instance: SatInstance) !Self {
         var watches = try allocator.alloc(std.ArrayList(Watch), variables * 2);
@@ -25,10 +26,20 @@ pub const WatchList = struct {
                 continue;
             }
 
-            list.appendClause(clause);
+            list.appendClause(
+                clause,
+                [_]Literal{
+                    clause.getLiterals()[0],
+                    clause.getLiterals()[1],
+                },
+            );
         }
     }
 
+    /// appends a clause to the watch list
+    ///
+    /// The two given literals should be different variables and included in the clause.
+    /// Additionally they should not be negated.
     pub fn appendClause(self: *Self, clause: Clause, literals: [2]Literal) void {
         for (literals, 0..1) |literal, i| {
             self.add_watch(literal, Watch{
