@@ -49,6 +49,18 @@ pub const WatchList = struct {
         }
     }
 
+    /// move a watch from one Literal to an other
+    fn move(self: *Self, watch: *Watch, from: Literal, to: Literal) void {
+        self.add_watch(to, watch.*);
+        self.remove(watch, from);
+    }
+
+    /// remove a watch from the watchlist of a given literal
+    fn remove(self: *Self, watch: *Watch, literal: Literal) void {
+        watch.* = self.watches[literal.toIndex()].pop();
+    }
+
+    /// add a watch to the watchlist of a literal
     fn add_watch(self: *Self, literal: Literal, watch: Watch) void {
         self.watches[literal.variable].append(watch);
     }
