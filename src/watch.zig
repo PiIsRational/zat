@@ -1,8 +1,8 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Clause = @import("clause.zig").Clause;
-const SatInstance = @import("sat instance.zig").SatInstance;
 const Literal = @import("literal.zig").Literal;
+const ClauseDb = @import("clause db.zig").ClauseDb;
 
 pub const WatchList = struct {
     watches: []std.ArrayList(Watch),
@@ -13,7 +13,7 @@ pub const WatchList = struct {
     /// init creates a new watchlist and initializes it
     ///
     /// the initialization does go through each clause and supposes that no variable in the clause is assigned
-    pub fn init(variables: usize, allocator: Allocator, instance: SatInstance) !Self {
+    pub fn init(variables: usize, allocator: Allocator, db: *ClauseDb) !Self {
         var watches = try allocator.alloc(std.ArrayList(Watch), variables * 2);
         var list = WatchList{
             .watches = watches,
@@ -21,7 +21,7 @@ pub const WatchList = struct {
         };
 
         // iterate through each clause and check if it is garbage or no
-        for (instance.clauses.items) |clause| {
+        for (db.*.items) |clause| {
             if (clause.isGarbage()) {
                 continue;
             }

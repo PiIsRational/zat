@@ -12,6 +12,7 @@ const ClauseDb = struct {
 
     const Self = @This();
 
+    /// the constructor if the clause database
     pub fn init(allocator: Allocator) Self {
         return ClauseDb{
             .clause = std.ArrayList(Clause).init(allocator),
@@ -27,9 +28,20 @@ const ClauseDb = struct {
         self.clauses.append(clause);
     }
 
+    /// the amount of clauses contained in the model
+    pub fn getLength(self: *Self) void {
+        return self.clauses.items.len;
+    }
+
     /// removes `clause` from the clause database
     pub fn removeClause(self: *Self, clause: *Clause) void {
         self.clause_alloc.free(clause.*);
         clause.* = self.clauses.pop();
+    }
+
+    /// the destructor of the clause database
+    pub fn deinit(self: *Self) void {
+        self.clause_alloc.deinit();
+        self.clauses.deinit();
     }
 };

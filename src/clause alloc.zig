@@ -7,15 +7,13 @@ const MemCell = @import("mem cell.zig").MemoryCell;
 const Garbage = @import("mem garbage.zig").Garbage;
 const ClauseDb = @import("clause db.zig").ClauseDb;
 
-const STANDARD_CLAUSE_SIZES: usize = 10;
-
 /// the struct used to allocate clauses
 const ClauseAllocator = struct {
-    database: ClauseDb,
+    database: *ClauseDb,
     literals: std.ArrayList(MemCell),
 
     /// the list containing the freed clauses
-    free_list: [STANDARD_CLAUSE_SIZES + 1]?*MemCell,
+    free_list: []?*MemCell,
 
     /// the fragmentation counts the amount of literals contained in the free list
     /// if the fragmentation gets too large the free list should get defragmented
@@ -23,11 +21,14 @@ const ClauseAllocator = struct {
 
     const Self = @This();
 
-    pub fn init(allocator: Allocator, db: ClauseDb) Self {
+    pub fn init(allocator: Allocator, db: *ClauseDb, var_count: usize) !Self {
+        var free_list = try allocator.alloc(?*MemCell, var_count + 1);
+
         return Self{
             .database = db,
             .literals = std.ArrayList(Literal).init(allocator),
             .fragmentation = 0,
+            .free_list = free_list,
         };
     }
 
@@ -51,13 +52,8 @@ const ClauseAllocator = struct {
         garbage.*.header.is_garbage = true;
         garbage.*.header.len = len;
 
-        if (len < STANDARD_CLAUSE_SIZES) {
-            garbage.next = self.free_list[len];
-            self.free_list[len] = garbage;
-        } else {
-            garbage.next = self.free_list[STANDARD_CLAUSE_SIZES];
-            self.free_list[STANDARD_CLAUSE_SIZES] = garbage;
-        }
+        garbage.next = self.free_list[len];
+        self.free_list[len] = garbage;
     }
 
     // would be nice to have a way of defragmenting the heap
@@ -83,13 +79,12 @@ const ClauseAllocator = struct {
         }
     }
 
-    fn allocStandard(self: Self, size: usize) Clause {
-        //TODO: implement
-        _ = size;
-        _ = self;
+    pub fn deinit(self: *Self) void {
+        self.literals.deinit();
+        self.literals.allocator.free(self.free_list);
     }
 
-    fn allocLarge(self: Self, size: usize) Clause {
+    fn allocStandard(self: Self, size: usize) Clause {
         //TODO: implement
         _ = size;
         _ = self;

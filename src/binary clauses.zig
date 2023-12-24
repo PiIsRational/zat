@@ -26,5 +26,7 @@ const BinClauses = struct {
         // because of the clause (first | second) we have first -> !second and second -> !first
         self.impls[first.toIndex()].append(second.negated());
         self.impls[second.toIndex()].append(first.negated());
+
+        self.len += 1;
     }
 };

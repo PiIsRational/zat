@@ -3,6 +3,8 @@ const SatInstance = @import("sat instance.zig").SatInstance;
 const Clause = @import("clause.zig").Clause;
 const Variable = @import("variable.zig").Variable;
 const Literal = @import("literal.zig").Literal;
+const ClauseDb = @import("clause db.zig").ClauseDb;
+const BinClauses = @import("binary clauses.zig").BinClauses;
 const Helper = @import("helper.zig");
 
 const std = @import("std");
@@ -10,9 +12,13 @@ const fs = std.fs;
 const BUFFER_SIZE = 10000;
 
 pub const InstanceBuilder = struct {
+    literal_list: std.ArrayList(Literal),
+    lit_counts: []usize,
     sat_type: SatData,
     clause_num: usize,
     allocator: Allocator,
+
+    const Self = @This();
 
     pub fn load_from_file(allocator: Allocator, path: []const u8) !SatInstance {
         const stdout = std.io.getStdOut().writer();
@@ -22,8 +28,10 @@ pub const InstanceBuilder = struct {
         var index: usize = 0;
         var currline = std.ArrayList(u8).init(allocator);
         var self = InstanceBuilder{
+            .literal_list = try std.ArrayList(Literal).init(allocator),
             .allocator = allocator,
             .sat_type = undefined,
+            .lit_counts = undefined,
             .clause_num = 0,
         };
 
@@ -77,6 +85,7 @@ pub const InstanceBuilder = struct {
                 try self.parse_p(line);
                 instance.allocator.free(instance.variables);
                 instance.variables = try instance.allocator.alloc(Variable, self.sat_type.variable_count);
+                self.lit_counts = try self.allocator.alloc(usize, self.sat_type.variable_count * 2);
                 @memset(instance.variables, .UNASSIGNED);
 
                 try stdout.print(
@@ -88,72 +97,94 @@ pub const InstanceBuilder = struct {
         }
     }
 
-    fn parse_clause(self: *InstanceBuilder, line: std.ArrayList(u8), instance: *SatInstance) !void {
-        _ = instance;
-        _ = line;
-        _ = self;
-        return;
-        //if (instance.clauses.items.len == self.sat_type.clause_count) {
-        //    return;
-        //}
+    fn parse_clause(
+        self: *InstanceBuilder,
+        line: std.ArrayList(u8),
+        db: *ClauseDb,
+        bin: *BinClauses,
+        instance: *SatInstance,
+    ) !void {
+        if (bin.len + db.getLength() == self.sat_type.clause_count) {
+            return;
+        }
 
-        //var new_clause = Clause{
-        //    .literals = std.ArrayList(Literal).init(instance.allocator),
-        //};
+        self.literal_list.clearRetainingCapacity();
+        var parsing_num = false;
+        var current_num: u31 = 1;
+        var neg: bool = false;
+        for (line.items) |character| {
+            if (parsing_num and is_whitespace(character)) {
+                parsing_num = false;
+                if (current_num > instance.variables.len) {
+                    std.debug.print("found a disallowed: {d}\n", .{current_num});
+                    return ParseError.NonExistingVariableRef;
+                }
 
-        //var parsing_num = false;
-        //var current_num: u31 = 1;
-        //var neg: bool = false;
-        //for (line.items) |character| {
-        //    if (parsing_num and is_whitespace(character)) {
-        //        parsing_num = false;
-        //        if (instance.*.variables.len < current_num) {
-        //            std.debug.print("found a disallowed: {d}\n", .{current_num});
-        //            return ParseError.NonExistingVariableRef;
-        //        }
+                if (current_num == 0) {
+                    break;
+                }
 
-        //        if (current_num == 0) {
-        //            break;
-        //        }
+                try self.literal_list.append(Literal{
+                    .is_negated = neg,
+                    .variable = current_num - 1,
+                });
 
-        //        try new_clause.literals.append(Literal{
-        //            .is_negated = neg,
-        //            .variable = current_num - 1,
-        //        });
+                current_num = 1;
+                neg = false;
+            }
 
-        //        current_num = 1;
-        //        neg = false;
-        //    }
+            if (parsing_num) {
+                if (!is_num(character)) {
+                    std.debug.print("found a disallowed: ({c})\n", .{character});
+                    return ParseError.NotaDigit;
+                }
 
-        //    if (parsing_num) {
-        //        if (!is_num(character)) {
-        //            std.debug.print("found a disallowed: ({c})\n", .{character});
-        //            return ParseError.NotaDigit;
-        //        }
+                current_num *= 10;
+                current_num += @intCast(character - '0');
+            }
 
-        //        current_num *= 10;
-        //        current_num += @intCast(character - '0');
-        //    }
+            if (!parsing_num and (character == '-' or is_num(character))) {
+                parsing_num = true;
 
-        //    if (!parsing_num and (character == '-' or is_num(character))) {
-        //        parsing_num = true;
+                if (character == '-') {
+                    neg = true;
+                    current_num = 0;
+                } else {
+                    current_num = @intCast(character - '0');
+                }
+            }
 
-        //        if (character == '-') {
-        //            neg = true;
-        //            current_num = 0;
-        //        } else {
-        //            current_num = @intCast(character - '0');
-        //        }
-        //    }
+            if (!parsing_num and !is_whitespace(character)) {
+                std.debug.print("found a disallowed: {c}\n", .{character});
+                return ParseError.UnexpectedCharacter;
+            }
+        }
 
-        //    if (!parsing_num and !is_whitespace(character)) {
-        //        std.debug.print("found a disallowed: {c}\n", .{character});
-        //        return ParseError.UnexpectedCharacter;
-        //    }
-        //}
+        var literals = self.trivialSimpl(self.literal_list.items);
+        if (self.triviallyTrue(literals)) {
+            return;
+        }
 
-        //try instance.clauses.append(new_clause);
-        //self.clause_num += 1;
+        // unit clause
+        if (literals.len == 1) {
+            var lit = literals[0];
+            instance.setting_order.append(lit.variable);
+            instance.variables[lit.variable] = if (lit.is_negated)
+                .FORCE_FALSE
+            else
+                .FORCE_TRUE;
+
+            return;
+        }
+
+        // binary clause
+        if (literals.len == 2) {
+            bin.addBinary(literals[0], literals[1]);
+            return;
+        }
+
+        // normal clause
+        db.addClause(literals);
     }
 
     fn is_whitespace(character: u8) bool {
@@ -221,6 +252,46 @@ pub const InstanceBuilder = struct {
             .variable_count = var_count,
             .clause_count = clause_count,
         };
+    }
+
+    /// Removes doubled literals from clauses.
+    pub fn trivialSimpl(self: *Self, literals: []Literal) []Literal {
+        @memset(self.clause_num, 0);
+        var i: usize = 0;
+        var end: usize = literals.len;
+
+        while (i < end) : (i += 1) {
+            var current = literals[i].toIndex();
+            if (self.lit_counts[current] == 1) {
+                literals[i] = literals[end];
+                end -= 1;
+            } else {
+                self.lit_counts[current] = 1;
+            }
+        }
+
+        return literals[0..end];
+    }
+
+    /// Checks if a Clause is trivially true.
+    ///
+    /// (it contains the negated and non negated literal of a variable)
+    pub fn triviallyTrue(self: *Self, literals: []Literal) bool {
+        if (literals.len == 0) {
+            return true;
+        }
+
+        @memset(self.clause_num, 0);
+
+        for (literals) |lit| {
+            if (self.lit_counts[lit.negated().toIndex()] == 1) {
+                return true;
+            } else {
+                self.lit_counts[lit.toIndex()] = 1;
+            }
+        }
+
+        return false;
     }
 
     const ParseError = error{
