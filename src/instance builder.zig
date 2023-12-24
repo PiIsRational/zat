@@ -28,19 +28,26 @@ pub const InstanceBuilder = struct {
         var index: usize = 0;
         var currline = std.ArrayList(u8).init(allocator);
         var self = InstanceBuilder{
-            .literal_list = try std.ArrayList(Literal).init(allocator),
+            .literal_list = std.ArrayList(Literal).init(allocator),
             .allocator = allocator,
             .sat_type = undefined,
             .lit_counts = undefined,
             .clause_num = 0,
         };
 
-        var instance = SatInstance.init(allocator, try allocator.alloc(Variable, 0));
+        var instance: SatInstance = undefined;
+        var bin_clauses: BinClauses = undefined;
+        var clause_db: ClauseDb = undefined;
 
         while (index < characters) {
             switch (buffer[index]) {
                 '\n' => {
-                    try self.parse_line(currline, &instance);
+                    try self.parse_line(
+                        currline,
+                        &clause_db,
+                        &bin_clauses,
+                        &instance,
+                    );
                     currline.clearRetainingCapacity();
                 },
                 else => {
@@ -71,11 +78,22 @@ pub const InstanceBuilder = struct {
         return instance;
     }
 
-    fn parse_line(self: *InstanceBuilder, line: std.ArrayList(u8), instance: *SatInstance) !void {
+    fn parse_line(
+        self: *InstanceBuilder,
+        line: std.ArrayList(u8),
+        db: *ClauseDb,
+        bin: *BinClauses,
+        instance: *SatInstance,
+    ) !void {
         const stdout = std.io.getStdOut().writer();
 
         if (line.items.len == 0) {
-            try self.parse_clause(line, instance);
+            try self.parse_clause(
+                line,
+                db,
+                bin,
+                instance,
+            );
             return;
         }
 
@@ -93,7 +111,12 @@ pub const InstanceBuilder = struct {
                     .{ self.sat_type.variable_count, self.sat_type.clause_count },
                 );
             },
-            else => try self.parse_clause(line, instance),
+            else => try self.parse_clause(
+                line,
+                db,
+                bin,
+                instance,
+            ),
         }
     }
 
@@ -110,7 +133,7 @@ pub const InstanceBuilder = struct {
 
         self.literal_list.clearRetainingCapacity();
         var parsing_num = false;
-        var current_num: u31 = 1;
+        var current_num: u30 = 1;
         var neg: bool = false;
         for (line.items) |character| {
             if (parsing_num and is_whitespace(character)) {
@@ -124,10 +147,10 @@ pub const InstanceBuilder = struct {
                     break;
                 }
 
-                try self.literal_list.append(Literal{
-                    .is_negated = neg,
-                    .variable = current_num - 1,
-                });
+                try self.literal_list.append(Literal.init(
+                    neg,
+                    current_num - 1,
+                ));
 
                 current_num = 1;
                 neg = false;
@@ -168,7 +191,7 @@ pub const InstanceBuilder = struct {
         // unit clause
         if (literals.len == 1) {
             var lit = literals[0];
-            instance.setting_order.append(lit.variable);
+            try instance.setting_order.append(lit.variable);
             instance.variables[lit.variable] = if (lit.is_negated)
                 .FORCE_FALSE
             else
@@ -256,7 +279,7 @@ pub const InstanceBuilder = struct {
 
     /// Removes doubled literals from clauses.
     pub fn trivialSimpl(self: *Self, literals: []Literal) []Literal {
-        @memset(self.clause_num, 0);
+        @memset(self.lit_counts, 0);
         var i: usize = 0;
         var end: usize = literals.len;
 
@@ -281,7 +304,7 @@ pub const InstanceBuilder = struct {
             return true;
         }
 
-        @memset(self.clause_num, 0);
+        @memset(self.lit_counts, 0);
 
         for (literals) |lit| {
             if (self.lit_counts[lit.negated().toIndex()] == 1) {

@@ -8,7 +8,7 @@ const Garbage = @import("mem garbage.zig").Garbage;
 const ClauseDb = @import("clause db.zig").ClauseDb;
 
 /// the struct used to allocate clauses
-const ClauseAllocator = struct {
+pub const ClauseAllocator = struct {
     database: *ClauseDb,
     literals: std.ArrayList(MemCell),
 
@@ -33,7 +33,7 @@ const ClauseAllocator = struct {
     }
 
     /// the method used to allocate a clause
-    pub fn alloc(self: Self, size: usize) Clause {
+    pub fn alloc(self: *Self, size: usize) Clause {
         return self.allocEnd(size);
         // if (size > STANDARD_CLAUSE_SIZES)
         //    self.allocLarge(size)
@@ -92,8 +92,8 @@ const ClauseAllocator = struct {
 
     /// the default allocation strategy
     /// it does not ook at the free list at all
-    fn allocEnd(self: Self, size: usize) Clause {
-        self.literals.append(MemCell{
+    fn allocEnd(self: *Self, size: u31) Clause {
+        try self.literals.append(MemCell{
             .header = ClauseHeader{
                 .is_garbage = false,
                 .len = size,

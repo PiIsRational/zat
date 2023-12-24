@@ -2,7 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Literal = @import("literal.zig").Literal;
 
-const BinClauses = struct {
+pub const BinClauses = struct {
     allocator: Allocator,
     impls: []std.ArrayList(Literal),
     len: usize,

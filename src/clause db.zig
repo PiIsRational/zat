@@ -5,7 +5,7 @@ const ClauseAlloc = @import("clause alloc.zig").ClauseAllocator;
 const Literal = @import("literal.zig").Literal;
 
 /// ClauseDb is the database for all clauses with at least 3 literals
-const ClauseDb = struct {
+pub const ClauseDb = struct {
     clauses: std.ArrayList(Clause),
     clause_alloc: ClauseAlloc,
     allocator: Allocator,
@@ -29,7 +29,7 @@ const ClauseDb = struct {
     }
 
     /// the amount of clauses contained in the model
-    pub fn getLength(self: *Self) void {
+    pub fn getLength(self: *Self) usize {
         return self.clauses.items.len;
     }
 
