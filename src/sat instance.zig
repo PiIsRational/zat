@@ -68,7 +68,7 @@ pub const SatInstance = struct {
         _ = options;
         _ = fmt;
 
-        for (self.clauses.items, 0..) |clause, i| {
+        for (self.clauses.clauses.items, 0..) |clause, i| {
             if (i != 0) {
                 try writer.print(" & ", .{});
             }

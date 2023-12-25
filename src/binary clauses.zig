@@ -22,10 +22,10 @@ pub const BinClauses = struct {
     }
 
     /// add a binary clause
-    pub fn addBinary(self: Self, first: Literal, second: Literal) void {
+    pub fn addBinary(self: *Self, first: Literal, second: Literal) !void {
         // because of the clause (first | second) we have first -> !second and second -> !first
-        self.impls[first.toIndex()].append(second.negated());
-        self.impls[second.toIndex()].append(first.negated());
+        try self.impls[first.toIndex()].append(second.negated());
+        try self.impls[second.toIndex()].append(first.negated());
 
         self.len += 1;
     }

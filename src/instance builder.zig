@@ -63,7 +63,12 @@ pub const InstanceBuilder = struct {
         }
 
         if (self.clause_num <= self.sat_type.clause_count) {
-            try self.parse_line(currline, &instance);
+            try self.parse_line(
+                currline,
+                &clause_db,
+                &bin_clauses,
+                &instance,
+            );
         }
 
         // wrong clause count
@@ -202,12 +207,12 @@ pub const InstanceBuilder = struct {
 
         // binary clause
         if (literals.len == 2) {
-            bin.addBinary(literals[0], literals[1]);
+            try bin.addBinary(literals[0], literals[1]);
             return;
         }
 
         // normal clause
-        db.addClause(literals);
+        try db.addClause(literals);
     }
 
     fn is_whitespace(character: u8) bool {

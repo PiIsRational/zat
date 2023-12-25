@@ -33,8 +33,8 @@ pub const ClauseAllocator = struct {
     }
 
     /// the method used to allocate a clause
-    pub fn alloc(self: *Self, size: usize) Clause {
-        return self.allocEnd(size);
+    pub fn alloc(self: *Self, size: usize) !Clause {
+        return try self.allocEnd(@intCast(size));
         // if (size > STANDARD_CLAUSE_SIZES)
         //    self.allocLarge(size)
         //else
@@ -92,7 +92,7 @@ pub const ClauseAllocator = struct {
 
     /// the default allocation strategy
     /// it does not ook at the free list at all
-    fn allocEnd(self: *Self, size: u31) Clause {
+    fn allocEnd(self: *Self, size: u31) !Clause {
         try self.literals.append(MemCell{
             .header = ClauseHeader{
                 .is_garbage = false,
@@ -102,7 +102,7 @@ pub const ClauseAllocator = struct {
 
         var header = &self.literals.items.ptr[self.literals.items.len - 1];
 
-        self.literals.appendNTimes(MemCell{
+        try self.literals.appendNTimes(MemCell{
             .literal = Literal{
                 .is_garbage = false,
                 .is_negated = false,
@@ -110,6 +110,6 @@ pub const ClauseAllocator = struct {
             },
         }, size);
 
-        return Clause.fromHeader(header.header);
+        return Clause.fromHeader(&header.header);
     }
 };

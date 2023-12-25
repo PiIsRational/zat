@@ -22,10 +22,10 @@ pub const ClauseDb = struct {
     }
 
     /// adds a clause containing `literals` to the clause database
-    pub fn addClause(self: *Self, literals: []Literal) void {
-        var clause = self.clause_alloc.alloc(literals.len);
+    pub fn addClause(self: *Self, literals: []Literal) !void {
+        var clause = try self.clause_alloc.alloc(literals.len);
         @memcpy(clause.getLiterals(), literals);
-        self.clauses.append(clause);
+        try self.clauses.append(clause);
     }
 
     /// the amount of clauses contained in the model
