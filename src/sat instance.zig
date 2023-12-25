@@ -14,7 +14,7 @@ pub const SatInstance = struct {
     allocator: Allocator,
     clauses: ClauseDb,
     binary_clauses: BinClauses,
-    watch_list: WatchList,
+    watch: WatchList,
     variables: []Variable,
     setting_order: std.ArrayList(usize),
 
@@ -22,16 +22,14 @@ pub const SatInstance = struct {
 
     pub fn init(
         allocator: Allocator,
-        variables: []Variable,
-        db: *ClauseDb,
-        bin: *BinClauses,
-    ) SatInstance {
+        variables: usize,
+    ) !SatInstance {
         return SatInstance{
             .allocator = allocator,
-            .clauses = db,
-            .binary_clauses = bin,
-            .watch = WatchList.init(variables.len, allocator, db),
-            .variables = variables,
+            .clauses = try ClauseDb.init(allocator, variables),
+            .binary_clauses = try BinClauses.init(allocator, variables),
+            .watch = try WatchList.init(variables, allocator),
+            .variables = try allocator.alloc(Variable, variables),
             .setting_order = std.ArrayList(usize).init(allocator),
         };
     }
@@ -57,6 +55,10 @@ pub const SatInstance = struct {
         }
 
         return true;
+    }
+
+    pub fn clauseCount(self: Self) usize {
+        return self.binary_clauses.len + self.clauses.getLength();
     }
 
     pub fn format(

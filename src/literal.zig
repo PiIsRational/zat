@@ -25,7 +25,7 @@ pub const Literal = packed struct {
 
     /// converts a literal to an index for slices or arrays
     pub fn toIndex(self: Self) usize {
-        return self.variable << 1 + @as(u5, if (self.is_negated) 1 else 0);
+        return @as(usize, @intCast(self.variable << 1)) + if (self.is_negated) @as(usize, 1) else @as(usize, 0);
     }
 
     /// returns the negated version of this literal

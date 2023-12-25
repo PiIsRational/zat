@@ -9,7 +9,6 @@ const ClauseDb = @import("clause db.zig").ClauseDb;
 
 /// the struct used to allocate clauses
 pub const ClauseAllocator = struct {
-    database: *ClauseDb,
     literals: std.ArrayList(MemCell),
 
     /// the list containing the freed clauses
@@ -21,14 +20,11 @@ pub const ClauseAllocator = struct {
 
     const Self = @This();
 
-    pub fn init(allocator: Allocator, db: *ClauseDb, var_count: usize) !Self {
-        var free_list = try allocator.alloc(?*MemCell, var_count + 1);
-
+    pub fn init(allocator: Allocator, var_count: usize) !Self {
         return Self{
-            .database = db,
-            .literals = std.ArrayList(Literal).init(allocator),
+            .literals = std.ArrayList(MemCell).init(allocator),
             .fragmentation = 0,
-            .free_list = free_list,
+            .free_list = try allocator.alloc(?*MemCell, var_count + 1),
         };
     }
 
@@ -56,9 +52,9 @@ pub const ClauseAllocator = struct {
         self.free_list[len] = garbage;
     }
 
-    // would be nice to have a way of defragmenting the heap
-    pub fn defragment(self: Self) void {
-        self.database.clauses.clearRetainingCapacity();
+    /// the function used to defragment the heap
+    pub fn defragment(self: Self, clause_list: *std.ArrayList(Clause)) void {
+        clause_list.clearRetainingCapacity();
         var old_literals = self.literals;
         self.literals = std.ArrayList(MemCell).init(self.literals.allocator);
 
@@ -70,7 +66,7 @@ pub const ClauseAllocator = struct {
                 i += current.garbage.len;
             } else {
                 const old_clause = Clause.fromHeader(current);
-                self.database.clauses.append(self.allocEnd(old_clause.getLength()));
+                try clause_list.append(self.allocEnd(old_clause.getLength()));
             }
         }
 

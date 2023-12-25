@@ -13,11 +13,13 @@ pub const BinClauses = struct {
         var impls = try allocator.alloc(std.ArrayList(Literal), 2 * variables);
 
         for (impls) |*impl| {
-            impl = std.ArrayList(Literal).init(allocator);
+            impl.* = std.ArrayList(Literal).init(allocator);
         }
 
         return BinClauses{
             .allocator = allocator,
+            .impls = impls,
+            .len = 0,
         };
     }
 

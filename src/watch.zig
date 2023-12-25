@@ -6,6 +6,7 @@ const ClauseDb = @import("clause db.zig").ClauseDb;
 
 pub const WatchList = struct {
     watches: []std.ArrayList(Watch),
+    initialized: bool,
     allocator: Allocator,
 
     const Self = @This();
@@ -13,27 +14,13 @@ pub const WatchList = struct {
     /// init creates a new watchlist and initializes it
     ///
     /// the initialization does go through each clause and supposes that no variable in the clause is assigned
-    pub fn init(variables: usize, allocator: Allocator, db: *ClauseDb) !Self {
+    pub fn init(variables: usize, allocator: Allocator) !Self {
         var watches = try allocator.alloc(std.ArrayList(Watch), variables * 2);
-        var list = WatchList{
+        return WatchList{
+            .initialized = false,
             .watches = watches,
             .allocator = allocator,
         };
-
-        // iterate through each clause and check if it is garbage or no
-        for (db.*.items) |clause| {
-            if (clause.isGarbage()) {
-                continue;
-            }
-
-            list.appendClause(
-                clause,
-                [_]Literal{
-                    clause.getLiterals()[0],
-                    clause.getLiterals()[1],
-                },
-            );
-        }
     }
 
     /// appends a clause to the watch list
@@ -47,6 +34,29 @@ pub const WatchList = struct {
                 .clause = clause,
             });
         }
+    }
+
+    pub fn set_up(self: *Self, db: *ClauseDb) void {
+        if (self.initialized) {
+            return;
+        }
+
+        // iterate through each clause and check if it is garbage or no
+        for (db.*.items) |clause| {
+            if (clause.isGarbage()) {
+                continue;
+            }
+
+            self.appendClause(
+                clause,
+                [_]Literal{
+                    clause.getLiterals()[0],
+                    clause.getLiterals()[1],
+                },
+            );
+        }
+
+        self.initialized = true;
     }
 
     /// move a watch from one Literal to an other

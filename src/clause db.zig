@@ -13,10 +13,10 @@ pub const ClauseDb = struct {
     const Self = @This();
 
     /// the constructor if the clause database
-    pub fn init(allocator: Allocator) Self {
+    pub fn init(allocator: Allocator, variables: usize) !Self {
         return ClauseDb{
-            .clause = std.ArrayList(Clause).init(allocator),
-            .clause_alloc = ClauseAlloc.init(Allocator),
+            .clauses = std.ArrayList(Clause).init(allocator),
+            .clause_alloc = try ClauseAlloc.init(allocator, variables),
             .allocator = allocator,
         };
     }
@@ -29,7 +29,7 @@ pub const ClauseDb = struct {
     }
 
     /// the amount of clauses contained in the model
-    pub fn getLength(self: *Self) usize {
+    pub fn getLength(self: Self) usize {
         return self.clauses.items.len;
     }
 

@@ -36,16 +36,12 @@ pub const InstanceBuilder = struct {
         };
 
         var instance: SatInstance = undefined;
-        var bin_clauses: BinClauses = undefined;
-        var clause_db: ClauseDb = undefined;
 
         while (index < characters) {
             switch (buffer[index]) {
                 '\n' => {
                     try self.parse_line(
                         currline,
-                        &clause_db,
-                        &bin_clauses,
                         &instance,
                     );
                     currline.clearRetainingCapacity();
@@ -62,17 +58,15 @@ pub const InstanceBuilder = struct {
             }
         }
 
-        if (self.clause_num <= self.sat_type.clause_count) {
+        if (instance.clauseCount() < self.sat_type.clause_count) {
             try self.parse_line(
                 currline,
-                &clause_db,
-                &bin_clauses,
                 &instance,
             );
         }
 
         // wrong clause count
-        if (self.clause_num != self.sat_type.clause_count) {
+        if (instance.clauseCount() != self.sat_type.clause_count) {
             try stdout.print("(ERROR) Illegal Clause Count!", .{});
             return ParseError.IllegalClauseCount;
         }
@@ -86,8 +80,6 @@ pub const InstanceBuilder = struct {
     fn parse_line(
         self: *InstanceBuilder,
         line: std.ArrayList(u8),
-        db: *ClauseDb,
-        bin: *BinClauses,
         instance: *SatInstance,
     ) !void {
         const stdout = std.io.getStdOut().writer();
@@ -95,8 +87,6 @@ pub const InstanceBuilder = struct {
         if (line.items.len == 0) {
             try self.parse_clause(
                 line,
-                db,
-                bin,
                 instance,
             );
             return;
@@ -106,8 +96,7 @@ pub const InstanceBuilder = struct {
             'c' => {},
             'p' => {
                 try self.parse_p(line);
-                instance.allocator.free(instance.variables);
-                instance.variables = try instance.allocator.alloc(Variable, self.sat_type.variable_count);
+                instance.* = try SatInstance.init(self.allocator, self.sat_type.variable_count);
                 self.lit_counts = try self.allocator.alloc(usize, self.sat_type.variable_count * 2);
                 @memset(instance.variables, .UNASSIGNED);
 
@@ -118,8 +107,6 @@ pub const InstanceBuilder = struct {
             },
             else => try self.parse_clause(
                 line,
-                db,
-                bin,
                 instance,
             ),
         }
@@ -128,11 +115,9 @@ pub const InstanceBuilder = struct {
     fn parse_clause(
         self: *InstanceBuilder,
         line: std.ArrayList(u8),
-        db: *ClauseDb,
-        bin: *BinClauses,
         instance: *SatInstance,
     ) !void {
-        if (bin.len + db.getLength() == self.sat_type.clause_count) {
+        if (instance.clauseCount() == self.sat_type.clause_count) {
             return;
         }
 
@@ -207,12 +192,12 @@ pub const InstanceBuilder = struct {
 
         // binary clause
         if (literals.len == 2) {
-            try bin.addBinary(literals[0], literals[1]);
+            try instance.binary_clauses.addBinary(literals[0], literals[1]);
             return;
         }
 
         // normal clause
-        try db.addClause(literals);
+        try instance.clauses.addClause(literals);
     }
 
     fn is_whitespace(character: u8) bool {
