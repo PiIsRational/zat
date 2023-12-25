@@ -77,5 +77,11 @@ pub const SatInstance = struct {
 
             try writer.print("({s})", .{clause});
         }
+
+        if (self.binary_clauses.len == 0) {
+            return;
+        }
+
+        try writer.print("\n{s}", .{self.binary_clauses});
     }
 };

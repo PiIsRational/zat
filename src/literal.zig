@@ -15,6 +15,14 @@ pub const Literal = packed struct {
         };
     }
 
+    pub fn fromIndex(index: usize) Literal {
+        return Literal{
+            .is_garbage = false,
+            .is_negated = index & 1 == 1,
+            .variable = @intCast(index >> 1),
+        };
+    }
+
     pub fn default() Literal {
         return Literal{
             .is_garbage = false,

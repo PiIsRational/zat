@@ -16,24 +16,6 @@ pub const Clause = struct {
     literals: [*]MemoryCell,
     const Self = @This();
 
-    pub fn format(
-        self: Self,
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
-        writer: anytype,
-    ) !void {
-        _ = options;
-        _ = fmt;
-
-        for (self.getLiterals(), 0..) |literal, i| {
-            try writer.print("{s}", .{literal});
-
-            if (i != self.getLength() - 1) {
-                try writer.print(" | ", .{});
-            }
-        }
-    }
-
     /// sets the literals of
     pub fn setLiterals(self: *Self, literals: []Literal) void {
         @memcpy(self.getLiterals(), literals);
@@ -59,6 +41,24 @@ pub const Clause = struct {
     /// getter for the literals contained in this clause as a slice
     pub fn getLiterals(self: Self) []Literal {
         return @ptrCast(self.literals[1 .. self.getLength() + 1]);
+    }
+
+    pub fn format(
+        self: Self,
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        _ = options;
+        _ = fmt;
+
+        for (self.getLiterals(), 0..) |literal, i| {
+            try writer.print("{s}", .{literal});
+
+            if (i != self.getLength() - 1) {
+                try writer.print(" | ", .{});
+            }
+        }
     }
 };
 

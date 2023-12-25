@@ -25,10 +25,26 @@ pub const BinClauses = struct {
 
     /// add a binary clause
     pub fn addBinary(self: *Self, first: Literal, second: Literal) !void {
-        // because of the clause (first | second) we have first -> !second and second -> !first
-        try self.impls[first.toIndex()].append(second.negated());
-        try self.impls[second.toIndex()].append(first.negated());
+        // because of the clause (first | second) we have !first -> second and !second -> first
+        try self.impls[first.negated().toIndex()].append(second);
+        try self.impls[second.negated().toIndex()].append(first);
 
         self.len += 1;
+    }
+
+    pub fn format(
+        self: Self,
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        _ = options;
+        _ = fmt;
+
+        for (self.impls, 0..) |impls, i| {
+            for (impls.items) |implicates| {
+                try writer.print(" & ({s} -> {s})", .{ Literal.fromIndex(i), implicates });
+            }
+        }
     }
 };
