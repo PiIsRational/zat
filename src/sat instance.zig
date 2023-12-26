@@ -62,8 +62,15 @@ pub const SatInstance = struct {
         return self.binary_clauses.len + self.clauses.getLength();
     }
 
+    /// adds a clause to this sat instance
+    ///
+    /// **CAUTION** assumes that the literals of the clauses are not assigned
     pub fn addClause(self: *Self, literals: []Literal) !void {
-        if (literals.len == 1) {}
+        // append a unit clause
+        if (literals.len == 1) {
+            self.units.append(literals[1]);
+            return;
+        }
 
         // binary clause
         if (literals.len == 2) {
@@ -73,17 +80,7 @@ pub const SatInstance = struct {
 
         // normal clause
         var clause = try self.clauses.addClause(literals);
-        var lits = [2]Literal{ Literal.default(), Literal.default() };
-        var i: usize = 0;
-        for (literals) |lit| {
-            _ = lit;
-
-            if (i == 2) {
-                break;
-            }
-        }
-
-        try self.watch.append(clause, lits);
+        try self.watch.append(clause, [_]Literal{ literals[0], literals[1] });
     }
 
     fn isTrue(self: Self, literal: Literal) bool {

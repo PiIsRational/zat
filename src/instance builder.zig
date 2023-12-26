@@ -184,22 +184,6 @@ pub const InstanceBuilder = struct {
             return;
         }
 
-        // unit clause
-        if (literals.len == 1) {
-            var lit = literals[0];
-
-            if (!try instance.set(
-                lit.variable,
-                if (lit.is_negated) .FORCE_FALSE else .FORCE_TRUE,
-            )) {
-                // there was a collision in the settings of the unit clauses
-                // the clause cannot be satisfiable
-                self.satisfiable = false;
-            }
-
-            return;
-        }
-
         try instance.addClause(literals);
     }
 
