@@ -17,6 +17,7 @@ pub const SatInstance = struct {
     watch: WatchList,
     variables: []Variable,
     setting_order: std.ArrayList(usize),
+    units: std.ArrayList(Literal),
 
     const Self = @This();
 
@@ -31,6 +32,7 @@ pub const SatInstance = struct {
             .watch = try WatchList.init(variables, allocator),
             .variables = try allocator.alloc(Variable, variables),
             .setting_order = std.ArrayList(usize).init(allocator),
+            .units = std.ArrayList(Literal).init(allocator),
         };
     }
 
@@ -61,6 +63,8 @@ pub const SatInstance = struct {
     }
 
     pub fn addClause(self: *Self, literals: []Literal) !void {
+        if (literals.len == 1) {}
+
         // binary clause
         if (literals.len == 2) {
             try self.binary_clauses.addBinary(literals[0], literals[1]);
@@ -69,6 +73,15 @@ pub const SatInstance = struct {
 
         // normal clause
         var clause = try self.clauses.addClause(literals);
+        var lits = [2]Literal{ Literal.default(), Literal.default() };
+        var i: usize = 0;
+        for (literals) |lit| {
+            _ = lit;
+
+            if (i == 2) {
+                break;
+            }
+        }
 
         try self.watch.append(clause, lits);
     }
@@ -103,5 +116,14 @@ pub const SatInstance = struct {
         }
 
         try writer.print("\n{s}", .{self.binary_clauses});
+    }
+
+    pub fn deinit(self: *SatInstance) void {
+        self.binary_clauses.deinit();
+        self.clauses.deinit();
+        self.setting_order.deinit();
+        self.units.deinit();
+        self.allocator.free(self.variables);
+        self.watch.deinit();
     }
 };

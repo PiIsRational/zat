@@ -32,6 +32,15 @@ pub const BinClauses = struct {
         self.len += 1;
     }
 
+    /// the destructor of the binary clauses
+    pub fn deinit(self: *Self) void {
+        for (self.impls) |*impl| {
+            impl.deinit();
+        }
+
+        self.allocator.free(self.impls);
+    }
+
     pub fn format(
         self: Self,
         comptime fmt: []const u8,

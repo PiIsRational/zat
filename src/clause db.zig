@@ -33,9 +33,11 @@ pub const ClauseDb = struct {
     }
 
     /// adds a clause containing `literals` to the clause database
-    pub fn addClause(self: *Self, literals: []Literal) !void {
+    pub fn addClause(self: *Self, literals: []Literal) !Clause {
         var clause = try self.alloc(literals.len);
         @memcpy(clause.getLiterals(), literals);
+
+        return clause;
     }
 
     /// the method used to allocate a clause
@@ -65,6 +67,13 @@ pub const ClauseDb = struct {
         clause.* = self.clauses.pop();
     }
 
+    /// the destructor of the clause database
+    pub fn deinit(self: *Self) void {
+        self.clauses.deinit();
+        self.memory.deinit();
+        self.allocator.free(self.free_list);
+    }
+
     /// the function used to defragment the heap
     fn defragment(self: *Self) void {
         self.clauses.clearRetainingCapacity();
@@ -87,13 +96,6 @@ pub const ClauseDb = struct {
         for (self.free_list) |*value| {
             value = null;
         }
-    }
-
-    /// the destructor of the clause database
-    pub fn deinit(self: *Self) void {
-        self.clauses.deinit();
-        self.memory.deinit();
-        self.allocator.free(self.free_list);
     }
 
     fn allocStandard(self: Self, size: usize) Clause {

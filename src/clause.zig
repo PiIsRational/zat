@@ -4,6 +4,7 @@ const LiteralFlag = @import("mem cell.zig").LiteralFlag;
 const Literal = @import("literal.zig").Literal;
 const Variable = @import("variable.zig").Variable;
 const MemoryCell = @import("mem cell.zig").MemoryCell;
+const SatInstance = @import("sat instance.zig").SatInstance;
 
 /// the clause struct
 ///
@@ -41,6 +42,17 @@ pub const Clause = struct {
     /// getter for the literals contained in this clause as a slice
     pub fn getLiterals(self: Self) []Literal {
         return @ptrCast(self.cells[1 .. self.getLength() + 1]);
+    }
+
+    /// checks that this clause is satisfied
+    pub fn isSatisfied(self: Self, instance: *SatInstance) bool {
+        for (self.getLiterals()) |lit| {
+            if (instance.isTrue(lit)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     pub fn format(

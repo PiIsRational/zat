@@ -23,19 +23,6 @@ pub const WatchList = struct {
         };
     }
 
-    /// appends a clause to the watch list
-    ///
-    /// The two given literals should be different variables and included in the clause.
-    /// Additionally they should not be negated.
-    pub fn appendClause(self: *Self, clause: Clause, literals: [2]Literal) void {
-        for (literals, 0..1) |literal, i| {
-            self.add_watch(literal, Watch{
-                .other = literals[i ^ 1],
-                .clause = clause,
-            });
-        }
-    }
-
     pub fn setUp(self: *Self, db: *ClauseDb) void {
         if (self.initialized) {
             return;
@@ -59,9 +46,31 @@ pub const WatchList = struct {
         self.initialized = true;
     }
 
+    /// appends a clause to the watch list
+    ///
+    /// The two given literals should be different variables and included in the clause.
+    /// Additionally they should not be negated.
+    pub fn append(self: *Self, clause: Clause, literals: [2]Literal) !void {
+        for (literals, 0..) |literal, i| {
+            try self.addWatch(literal, Watch{
+                .other = literals[i ^ 1],
+                .clause = clause,
+            });
+        }
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.initialized = false;
+        for (self.watches) |watch| {
+            watch.deinit();
+        }
+
+        self.allocator.free(self.watches);
+    }
+
     /// move a watch from one Literal to an other
     fn move(self: *Self, watch: *Watch, from: Literal, to: Literal) void {
-        self.add_watch(to, watch.*);
+        self.addWatch(to, watch.*);
         self.remove(watch, from);
     }
 
@@ -71,8 +80,8 @@ pub const WatchList = struct {
     }
 
     /// add a watch to the watchlist of a literal
-    fn add_watch(self: *Self, literal: Literal, watch: Watch) void {
-        self.watches[literal.variable].append(watch);
+    fn addWatch(self: *Self, literal: Literal, watch: Watch) !void {
+        try self.watches[literal.variable].append(watch);
     }
 };
 

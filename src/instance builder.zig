@@ -32,7 +32,7 @@ pub const InstanceBuilder = struct {
         defer currline.deinit();
         var self = InstanceBuilder{
             .literal_list = std.ArrayList(Literal).init(allocator),
-            .satisfyable = true,
+            .satisfiable = true,
             .allocator = allocator,
             .sat_type = undefined,
             .lit_counts = undefined,
@@ -188,7 +188,7 @@ pub const InstanceBuilder = struct {
         if (literals.len == 1) {
             var lit = literals[0];
 
-            if (!instance.set(
+            if (!try instance.set(
                 lit.variable,
                 if (lit.is_negated) .FORCE_FALSE else .FORCE_TRUE,
             )) {
@@ -200,14 +200,7 @@ pub const InstanceBuilder = struct {
             return;
         }
 
-        // binary clause
-        if (literals.len == 2) {
-            try instance.binary_clauses.addBinary(literals[0], literals[1]);
-            return;
-        }
-
-        // normal clause
-        try instance.clauses.addClause(literals);
+        try instance.addClause(literals);
     }
 
     fn is_whitespace(character: u8) bool {
