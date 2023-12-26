@@ -13,7 +13,7 @@ const MemoryCell = @import("mem cell.zig").MemoryCell;
 ///
 /// after that the literals are stored in order
 pub const Clause = struct {
-    literals: [*]MemoryCell,
+    cells: [*]MemoryCell,
     const Self = @This();
 
     /// sets the literals of
@@ -24,23 +24,23 @@ pub const Clause = struct {
     /// initializes a clause from the pointer to its header
     pub fn fromHeader(header: *ClauseHeader) Clause {
         return Clause{
-            .literals = @ptrCast(header),
+            .cells = @ptrCast(header),
         };
     }
 
     /// checks if this clause points to garbage in memory
     pub fn isGarbage(self: Self) bool {
-        return self.literals[0].header.is_garbage;
+        return self.cells[0].header.is_garbage;
     }
 
     /// getter for the amount of literals in this clause
     pub fn getLength(self: Self) usize {
-        return self.literals[0].header.len;
+        return self.cells[0].header.len;
     }
 
     /// getter for the literals contained in this clause as a slice
     pub fn getLiterals(self: Self) []Literal {
-        return @ptrCast(self.literals[1 .. self.getLength() + 1]);
+        return @ptrCast(self.cells[1 .. self.getLength() + 1]);
     }
 
     pub fn format(
