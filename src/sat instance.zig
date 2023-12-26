@@ -55,6 +55,11 @@ pub const SatInstance = struct {
 
         self.variables[variable] = state;
         try self.setting_order.append(variable);
+        self.watch.set(Literal.init(
+            !state.isTrue(),
+            @intCast(variable),
+        ), self);
+
         return true;
     }
 
@@ -83,8 +88,22 @@ pub const SatInstance = struct {
         try self.watch.append(clause, [_]Literal{ literals[0], literals[1] });
     }
 
+    fn setUnits(self: *Self) !void {
+        for (self.units) |to_set| {
+            if (!try self.set(
+                to_set.variable,
+                if (to_set.is_negated)
+                    .FORCE_FALSE
+                else
+                    .FORCE_TRUE,
+            )) {
+                // in this case there was a conflict
+            }
+        }
+    }
+
     fn isTrue(self: Self, literal: Literal) bool {
-        return literal.variable == (@intFromEnum(self.variables[literal.variable]) & 1 == 1);
+        return literal.is_negated != self.variables[literal.variable].isTrue();
     }
 
     fn unassigned(self: Self, literal: Literal) bool {
