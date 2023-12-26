@@ -42,7 +42,7 @@ pub const SatInstance = struct {
     /// set `variable` to `state`.
     ///
     /// iff was able to set returns true
-    fn set(self: *Self, variable: usize, state: Variable) !bool {
+    pub fn set(self: *Self, variable: usize, state: Variable) !bool {
         if (self.variables[variable] == state) {
             return true;
         }
@@ -53,10 +53,32 @@ pub const SatInstance = struct {
 
         self.variables[variable] = state;
         try self.setting_order.append(variable);
+        return true;
     }
 
     pub fn clauseCount(self: Self) usize {
         return self.binary_clauses.len + self.clauses.getLength();
+    }
+
+    pub fn addClause(self: *Self, literals: []Literal) !void {
+        // binary clause
+        if (literals.len == 2) {
+            try self.binary_clauses.addBinary(literals[0], literals[1]);
+            return;
+        }
+
+        // normal clause
+        var clause = try self.clauses.addClause(literals);
+
+        try self.watch.append(clause, lits);
+    }
+
+    fn isTrue(self: Self, literal: Literal) bool {
+        return literal.variable == (@intFromEnum(self.variables[literal.variable]) & 1 == 1);
+    }
+
+    fn unassigned(self: Self, literal: Literal) bool {
+        return self.variables[literal.variable] == .UNASSIGNED;
     }
 
     pub fn format(
