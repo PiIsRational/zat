@@ -36,7 +36,7 @@ pub const WatchList = struct {
         }
     }
 
-    pub fn set_up(self: *Self, db: *ClauseDb) void {
+    pub fn setUp(self: *Self, db: *ClauseDb) void {
         if (self.initialized) {
             return;
         }

@@ -36,25 +36,23 @@ pub const SatInstance = struct {
 
     pub fn solve(self: *Self) !SatResult {
         _ = self;
-        return SatResult{ .UNSAT = true };
+        return SatResult{ .UNSAT = false };
     }
 
-    fn verify(self: Self) bool {
-        for (self.clauses.items) |clause| {
-            var found_one: bool = false;
-            for (clause.literals) |literal| {
-                if (self.variables[literal.variable].isTrue() != literal.is_negated) {
-                    found_one = true;
-                    break;
-                }
-            }
-
-            if (!found_one) {
-                return false;
-            }
+    /// set `variable` to `state`.
+    ///
+    /// iff was able to set returns true
+    fn set(self: *Self, variable: usize, state: Variable) !bool {
+        if (self.variables[variable] == state) {
+            return true;
         }
 
-        return true;
+        if (self.variables[variable] != .UNASSIGNED) {
+            return false;
+        }
+
+        self.variables[variable] = state;
+        try self.setting_order.append(variable);
     }
 
     pub fn clauseCount(self: Self) usize {

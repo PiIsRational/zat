@@ -16,6 +16,7 @@ pub const InstanceBuilder = struct {
     lit_counts: []usize,
     sat_type: SatData,
     clause_num: usize,
+    satisfiable: bool,
     allocator: Allocator,
 
     const Self = @This();
@@ -31,6 +32,7 @@ pub const InstanceBuilder = struct {
         defer currline.deinit();
         var self = InstanceBuilder{
             .literal_list = std.ArrayList(Literal).init(allocator),
+            .satisfyable = true,
             .allocator = allocator,
             .sat_type = undefined,
             .lit_counts = undefined,
@@ -39,6 +41,7 @@ pub const InstanceBuilder = struct {
         defer self.deinit();
 
         var instance: SatInstance = undefined;
+        defer instance.watch.setUp(instance.clauses);
 
         while (index < characters) {
             switch (buffer[index]) {
@@ -184,11 +187,15 @@ pub const InstanceBuilder = struct {
         // unit clause
         if (literals.len == 1) {
             var lit = literals[0];
-            try instance.setting_order.append(lit.variable);
-            instance.variables[lit.variable] = if (lit.is_negated)
-                .FORCE_FALSE
-            else
-                .FORCE_TRUE;
+
+            if (!instance.set(
+                lit.variable,
+                if (lit.is_negated) .FORCE_FALSE else .FORCE_TRUE,
+            )) {
+                // there was a collision in the settings of the unit clauses
+                // the clause cannot be satisfiable
+                self.satisfiable = false;
+            }
 
             return;
         }
