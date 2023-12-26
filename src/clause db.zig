@@ -40,6 +40,8 @@ pub const ClauseDb = struct {
 
     /// the method used to allocate a clause
     pub fn alloc(self: *Self, size: usize) !Clause {
+        std.debug.assert(size >= 3);
+
         var clause = try self.allocEnd(@intCast(size));
         try self.clauses.append(clause);
 

@@ -24,9 +24,11 @@ pub const InstanceBuilder = struct {
         const stdout = std.io.getStdOut().writer();
         var reader = try fs.cwd().openFile(path, .{});
         var buffer = try allocator.alloc(u8, BUFFER_SIZE);
+        defer allocator.free(buffer);
         var characters = try reader.read(buffer);
         var index: usize = 0;
         var currline = std.ArrayList(u8).init(allocator);
+        defer currline.deinit();
         var self = InstanceBuilder{
             .literal_list = std.ArrayList(Literal).init(allocator),
             .allocator = allocator,
@@ -34,6 +36,7 @@ pub const InstanceBuilder = struct {
             .lit_counts = undefined,
             .clause_num = 0,
         };
+        defer self.deinit();
 
         var instance: SatInstance = undefined;
 
@@ -268,7 +271,7 @@ pub const InstanceBuilder = struct {
     }
 
     /// Removes doubled literals from clauses.
-    pub fn trivialSimpl(self: *Self, literals: []Literal) []Literal {
+    fn trivialSimpl(self: *Self, literals: []Literal) []Literal {
         @memset(self.lit_counts, 0);
         var i: usize = 0;
         var end: usize = literals.len;
@@ -289,7 +292,7 @@ pub const InstanceBuilder = struct {
     /// Checks if a Clause is trivially true.
     ///
     /// (it contains the negated and non negated literal of a variable)
-    pub fn triviallyTrue(self: *Self, literals: []Literal) bool {
+    fn triviallyTrue(self: *Self, literals: []Literal) bool {
         if (literals.len == 0) {
             return true;
         }
@@ -305,6 +308,11 @@ pub const InstanceBuilder = struct {
         }
 
         return false;
+    }
+
+    fn deinit(self: *Self) void {
+        self.allocator.free(self.lit_counts);
+        self.literal_list.deinit();
     }
 
     const ParseError = error{
