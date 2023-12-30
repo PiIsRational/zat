@@ -21,7 +21,7 @@ pub const Variable = enum(i8) {
 
     /// checks if this variable is false
     pub fn isFalse(self: Self) bool {
-        return @intFromEnum(self) & 1 == 1;
+        return @intFromEnum(self) & 1 == 0;
     }
 
     pub fn isEqual(self: Self, other: Self) bool {
@@ -60,8 +60,12 @@ pub const Variable = enum(i8) {
         _ = options;
         _ = fmt;
 
-        if (!self.isTrue()) {
+        if (self.isFalse()) {
             try writer.print("-", .{});
+        }
+
+        if (self == .UNASSIGNED) {
+            try writer.print("~", .{});
         }
     }
 };

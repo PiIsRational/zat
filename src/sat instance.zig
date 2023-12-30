@@ -37,6 +37,8 @@ pub const SatInstance = struct {
 
     pub fn solve(self: *Self) !SatResult {
         while (true) {
+            std.debug.print("{s}\n", .{SatResult{ .SAT = self.variables }});
+
             // first resolve unit clauses
             if (try self.setUnits()) {
                 if (!self.resolve()) {
@@ -49,13 +51,15 @@ pub const SatInstance = struct {
             if (self.setting_order.items.len == self.variables.len) {
                 assert(self.isSat());
 
-                return SatResult{
-                    .SAT = self.variables,
-                };
+                return SatResult{ .SAT = self.variables };
             }
 
             // choose a variable to set
-            try self.choose();
+            if (try self.choose()) {
+                if (!self.resolve()) {
+                    return SatResult.UNSAT;
+                }
+            }
         }
     }
 
@@ -92,7 +96,7 @@ pub const SatInstance = struct {
     pub fn addClause(self: *Self, literals: []Literal) !void {
         // append a unit clause
         if (literals.len == 1) {
-            try self.units.append(literals[1]);
+            try self.units.append(literals[0]);
             return;
         }
 
@@ -106,6 +110,7 @@ pub const SatInstance = struct {
         _ = try self.clauses.addClause(literals);
     }
 
+    /// checks if the instance is currently satisfied
     fn isSat(self: *Self) bool {
         for (self.clauses.clauses.items) |c| {
             if (!c.isSatisfied(self)) {
@@ -135,7 +140,9 @@ pub const SatInstance = struct {
             // now that the variable was set check implications
             for (self.binary_clauses.getImplied(to_set)) |to_add| {
                 if (!self.isFalse(to_add)) {
-                    try self.units.append(to_add);
+                    if (self.unassigned(to_add)) {
+                        try self.units.append(to_add);
+                    }
                 } else {
                     // if the literal is false we have a conflict
                     return true;
@@ -144,21 +151,24 @@ pub const SatInstance = struct {
         }
 
         // we managed to go through unit propagation without a conflict
-        // -> the unit list can be cleared
+        // => the unit list can be cleared
         self.units.clearRetainingCapacity();
 
         return false;
     }
 
     /// choose the next literal to pick and set it
-    fn choose(self: *Self) !void {
+    ///
+    /// iff encountered an error returns true
+    fn choose(self: *Self) !bool {
         // TODO: implement proper heuristics to make this work
         for (self.variables, 0..) |v, i| {
             if (v == .UNASSIGNED) {
-                _ = try self.set(i, .TEST_TRUE);
-                return;
+                return !try self.set(i, .TEST_TRUE);
             }
         }
+
+        return true;
     }
 
     /// the method used to resolve a conflict in the assignement

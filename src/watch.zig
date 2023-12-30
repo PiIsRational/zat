@@ -199,7 +199,7 @@ const Watch = struct {
         }
 
         // check that the other watched literal is not negated
-        // it should not be possible for it to be false
+        // if it is false we have a conflict
         if (instance.isFalse(other_watch)) {
             return Result(?Literal).FAIL;
         }
