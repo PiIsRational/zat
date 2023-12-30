@@ -38,7 +38,7 @@ pub const SatInstance = struct {
 
     pub fn solve(self: *Self) !SatResult {
         _ = self;
-        return SatResult{ .UNSAT = false };
+        // first resolve unit clauses
     }
 
     /// set `variable` to `state`.
@@ -95,7 +95,7 @@ pub const SatInstance = struct {
     ///
     /// returns true iff there was a conflict
     fn setUnits(self: *Self) !bool {
-        for (self.units) |to_set| {
+        for (self.units.items) |to_set| {
             if (!try self.set(
                 to_set.variable,
                 if (to_set.is_negated)
@@ -106,7 +106,21 @@ pub const SatInstance = struct {
                 // in this case there was a conflict
                 return true;
             }
+
+            // now that the variable was set check implications
+            for (self.binary_clauses.getImplied(to_set)) |to_add| {
+                if (!self.isFalse(to_add)) {
+                    self.units.append(to_add);
+                } else {
+                    // if the literal is false we have a conflict
+                    return true;
+                }
+            }
         }
+
+        // we managed to go through unit propagation without a conflict
+        // -> the unit list can be cleared
+        self.units.clearRetainingCapacity();
 
         return false;
     }

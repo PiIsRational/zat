@@ -41,6 +41,11 @@ pub const BinClauses = struct {
         self.allocator.free(self.impls);
     }
 
+    /// get the literals implied by a given literal
+    pub fn getImplied(self: Self, literal: Literal) []const Literal {
+        return self.impls[literal.toIndex()];
+    }
+
     pub fn format(
         self: Self,
         comptime fmt: []const u8,
