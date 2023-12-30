@@ -7,7 +7,7 @@ const PossibleResults = enum {
 };
 
 pub const SatResult = union(PossibleResults) {
-    UNSAT: void,
+    UNSAT,
     SAT: []Variable,
 
     const Self = @This();

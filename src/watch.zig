@@ -53,11 +53,11 @@ pub const WatchList = struct {
     }
 
     /// sets `literal` to true and checks for unit clauses
-    pub fn set(self: *Self, literal: Literal, instance: *SatInstance) void {
+    pub fn set(self: *Self, literal: Literal, instance: *SatInstance) !void {
         for (self.watches[literal.negated().toIndex()].items) |*watch| {
-            if (watch.*.set(literal, instance)) |new_literal| {
+            if (try watch.set(literal, instance)) |new_literal| {
                 // the returns value is not null, so we need to move the watch
-                self.move(watch, literal, new_literal);
+                try self.move(watch, literal, new_literal);
             }
         }
     }
@@ -86,8 +86,8 @@ pub const WatchList = struct {
     }
 
     /// move a watch from one Literal to an other
-    fn move(self: *Self, watch: *Watch, from: Literal, to: Literal) void {
-        self.addWatch(to, watch.*);
+    fn move(self: *Self, watch: *Watch, from: Literal, to: Literal) !void {
+        try self.addWatch(to, watch.*);
         self.remove(watch, from);
     }
 
@@ -111,7 +111,7 @@ const Watch = struct {
     /// updates the watch according to `literal` and updates `instance`
     ///
     /// if returns non null the literal to watch is the returns value
-    fn set(self: *Self, literal: Literal, instance: *SatInstance) ?Literal {
+    fn set(self: *Self, literal: Literal, instance: *SatInstance) !?Literal {
         // there are 3 cases:
         //
         // - the clause is assigned
@@ -121,15 +121,15 @@ const Watch = struct {
         // first check that the blocking literal is assigned true
         // because if it is the case the clause is already satisfied
         if (instance.isTrue(self.blocking)) {
-            return false;
+            return null;
         }
 
-        var literals = self.clause.getLiterals(instance.clauses);
+        var literals = self.clause.getLiterals(&instance.clauses);
 
         // if the current watched literal is the first, switch it with the second one
         // as it will not be watched anymore
-        var other_watch = self.clause.getLiterals(instance.clauses)[0];
-        if (literal == other_watch) {
+        var other_watch = self.clause.getLiterals(&instance.clauses)[0];
+        if (literal.eql(other_watch)) {
             std.mem.swap(Literal, &literals[0], &literals[1]);
             other_watch = literals[0];
         }
@@ -141,7 +141,7 @@ const Watch = struct {
         // check that the other watch is true, because of it is we are done as te clause
         // is satisfied. we check that the blocking literal is not the other watch as the
         // blocking iteral is already known to be untrue.
-        if (self.blocking != other_watch and instance.isTrue(other_watch)) {
+        if (!self.blocking.eql(other_watch) and instance.isTrue(other_watch)) {
             return null;
         }
 
@@ -163,7 +163,7 @@ const Watch = struct {
 
         // if we did not find a second watch we got a unit clause
         // the literal
-        instance.units.append(other_watch);
+        try instance.units.append(other_watch);
 
         // no need to move this watch
         return null;

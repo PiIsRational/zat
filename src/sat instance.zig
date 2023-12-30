@@ -37,30 +37,24 @@ pub const SatInstance = struct {
     }
 
     pub fn solve(self: *Self) !SatResult {
-        // first resolve unit clauses
-        if (self.setUnits()) {
-            if (!self.resolve()) {
+        while (true) {
+            // first resolve unit clauses
+            if (try self.setUnits()) {
+                if (!self.resolve()) {
+                    return SatResult.UNSAT;
+                }
+            }
+
+            // if the variable were all set without a conflict
+            // we have found a sitisfying result
+            if (self.setting_order.items.len == self.variables.len) {
                 return SatResult{
-                    .UNSAT = false,
+                    .SAT = self.variables,
                 };
             }
-        }
 
-        // if the variable were all set without a conflict
-        // we have found a sitisfying result
-        if (self.setting_order.items.len == self.variables.len) {
-            return SatResult{
-                .SAT = self.variables,
-            };
-        }
-
-        // choose a variable to set
-        if (self.choose()) {
-            if (!self.resolve()) {
-                return SatResult{
-                    .UNSAT = false,
-                };
-            }
+            // choose a variable to set
+            try self.choose();
         }
     }
 
@@ -81,7 +75,7 @@ pub const SatInstance = struct {
 
         self.variables[variable] = state;
         try self.setting_order.append(variable);
-        self.watch.set(Literal.init(
+        try self.watch.set(Literal.init(
             !state.isTrue(),
             @intCast(variable),
         ), self);
@@ -133,7 +127,7 @@ pub const SatInstance = struct {
             // now that the variable was set check implications
             for (self.binary_clauses.getImplied(to_set)) |to_add| {
                 if (!self.isFalse(to_add)) {
-                    self.units.append(to_add);
+                    try self.units.append(to_add);
                 } else {
                     // if the literal is false we have a conflict
                     return true;
@@ -148,9 +142,14 @@ pub const SatInstance = struct {
         return false;
     }
 
-    fn choose(self: *Self) bool {
-        _ = self;
-        return true;
+    /// choose the next literal to pick and set it
+    fn choose(self: *Self) !void {
+        // TODO: implement proper heuristics to make this work
+        for (self.variables, 0..) |v, i| {
+            if (v == .UNASSIGNED) {
+                _ = try self.set(i, .TEST_TRUE);
+            }
+        }
     }
 
     /// the method used to resolve a conflict in the assignement

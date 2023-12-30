@@ -39,6 +39,10 @@ pub const Literal = packed struct {
             @as(usize, 0);
     }
 
+    pub fn eql(self: Self, other: Self) bool {
+        return self.variable == other.variable and self.is_negated == other.is_negated;
+    }
+
     /// returns the negated version of this literal
     pub fn negated(self: Self) Self {
         return Literal{
