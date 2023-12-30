@@ -36,8 +36,13 @@ pub const Clause = struct {
         return db.*.memory.items[self.index].header.len;
     }
 
-    /// getter for the literals contained in this clause as a slice
-    pub fn getLiterals(self: Self, db: *ClauseDb) []Literal {
+    /// getter for the literals contained in this clause as a const slice
+    pub fn getLiterals(self: Self, db: *ClauseDb) []const Literal {
+        return self.getLitsMut(db);
+    }
+
+    /// getter for the literals as a normal slice
+    pub fn getLitsMut(self: Self, db: *ClauseDb) []Literal {
         return @ptrCast(db.memory.items[self.index + 1 .. self.index + self.getLength(db) + 1]);
     }
 

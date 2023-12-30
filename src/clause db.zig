@@ -35,7 +35,7 @@ pub const ClauseDb = struct {
     /// adds a clause containing `literals` to the clause database
     pub fn addClause(self: *Self, literals: []Literal) !Clause {
         var clause = try self.alloc(literals.len);
-        @memcpy(clause.getLiterals(self), literals);
+        @memcpy(clause.getLitsMut(self), literals);
 
         return clause;
     }

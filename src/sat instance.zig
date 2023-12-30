@@ -46,9 +46,9 @@ pub const SatInstance = struct {
 
             // if the variable were all set without a conflict
             // we have found a sitisfying result
-            if (self.setting_order.items.len == self.variables.len and
-                self.isSat())
-            {
+            if (self.setting_order.items.len == self.variables.len) {
+                assert(self.isSat());
+
                 return SatResult{
                     .SAT = self.variables,
                 };
@@ -103,13 +103,14 @@ pub const SatInstance = struct {
         }
 
         // normal clause
-        var clause = try self.clauses.addClause(literals);
-        try self.watch.append(clause, [_]Literal{ literals[0], literals[1] });
+        _ = try self.clauses.addClause(literals);
     }
 
     fn isSat(self: *Self) bool {
         for (self.clauses.clauses.items) |c| {
-            assert(c.isSatisfied(self));
+            if (!c.isSatisfied(self)) {
+                return false;
+            }
         }
 
         return true;
