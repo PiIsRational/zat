@@ -1,9 +1,11 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const Clause = @import("clause.zig").Clause;
 const Literal = @import("literal.zig").Literal;
 const ClauseDb = @import("clause db.zig").ClauseDb;
 const SatInstance = @import("sat instance.zig").SatInstance;
+const Result = @import("result.zig").Result;
 
 pub const WatchList = struct {
     watches: []std.ArrayList(Watch),
@@ -53,13 +55,20 @@ pub const WatchList = struct {
     }
 
     /// sets `literal` to true and checks for unit clauses
-    pub fn set(self: *Self, literal: Literal, instance: *SatInstance) !void {
+    ///
+    /// iff there was an error returns true
+    pub fn set(self: *Self, literal: Literal, instance: *SatInstance) !bool {
         for (self.watches[literal.negated().toIndex()].items) |*watch| {
-            if (try watch.set(literal, instance)) |new_literal| {
-                // the returns value is not null, so we need to move the watch
-                try self.move(watch, literal, new_literal);
+            switch (try watch.set(literal, instance)) {
+                .OK => |value| if (value) |new_literal| {
+                    // the returns value is not null, so we need to move the watch
+                    try self.move(watch, literal, new_literal);
+                },
+                .FAIL => return true,
             }
         }
+
+        return false;
     }
 
     /// appends a clause to the watch list
@@ -98,7 +107,7 @@ pub const WatchList = struct {
 
     /// add a watch to the watchlist of a literal
     fn addWatch(self: *Self, literal: Literal, watch: Watch) !void {
-        try self.watches[literal.variable].append(watch);
+        try self.watches[literal.toIndex()].append(watch);
     }
 };
 
@@ -111,7 +120,7 @@ const Watch = struct {
     /// updates the watch according to `literal` and updates `instance`
     ///
     /// if returns non null the literal to watch is the returns value
-    fn set(self: *Self, literal: Literal, instance: *SatInstance) !?Literal {
+    fn set(self: *Self, literal: Literal, instance: *SatInstance) !Result(?Literal) {
         // there are 3 cases:
         //
         // - the clause is assigned
@@ -121,7 +130,7 @@ const Watch = struct {
         // first check that the blocking literal is assigned true
         // because if it is the case the clause is already satisfied
         if (instance.isTrue(self.blocking)) {
-            return null;
+            return Result(?Literal){ .OK = null };
         }
 
         var literals = self.clause.getLiterals(&instance.clauses);
@@ -142,7 +151,7 @@ const Watch = struct {
         // is satisfied. we check that the blocking literal is not the other watch as the
         // blocking iteral is already known to be untrue.
         if (!self.blocking.eql(other_watch) and instance.isTrue(other_watch)) {
-            return null;
+            return Result(?Literal){ .OK = null };
         }
 
         // go through the other literals to find a new watch
@@ -153,19 +162,21 @@ const Watch = struct {
                 // move this watch to the new watchlist
                 std.mem.swap(Literal, lit, &literals[1]);
 
-                return lit.*;
+                return Result(?Literal){ .OK = lit.* };
             }
         }
 
         // check that the other watched literal is not negated
         // it should not be possible for it to be false
-        std.debug.assert(!instance.isFalse(other_watch));
+        if (instance.isFalse(other_watch)) {
+            return Result(?Literal).FAIL;
+        }
 
         // if we did not find a second watch we got a unit clause
         // the literal
         try instance.units.append(other_watch);
 
         // no need to move this watch
-        return null;
+        return Result(?Literal){ .OK = null };
     }
 };

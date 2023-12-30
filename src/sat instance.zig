@@ -4,12 +4,10 @@ const Allocator = std.mem.Allocator;
 const Variable = @import("variable.zig").Variable;
 const Clause = @import("clause.zig").Clause;
 const ClauseDb = @import("clause db.zig").ClauseDb;
-const SatResult = @import("sat_result.zig").SatResult;
+const SatResult = @import("result.zig").SatResult;
 const Literal = @import("literal.zig").Literal;
 const BinClauses = @import("binary clauses.zig").BinClauses;
 const WatchList = @import("watch.zig").WatchList;
-
-const defaultResult = [_]Variable{ .FORCE_FALSE, .FORCE_TRUE };
 
 pub const SatInstance = struct {
     allocator: Allocator,
@@ -78,12 +76,10 @@ pub const SatInstance = struct {
 
         self.variables[variable] = state;
         try self.setting_order.append(variable);
-        try self.watch.set(Literal.init(
+        return !try self.watch.set(Literal.init(
             !state.isTrue(),
             @intCast(variable),
         ), self);
-
-        return true;
     }
 
     pub fn clauseCount(self: Self) usize {

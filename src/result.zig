@@ -42,3 +42,15 @@ pub const SatResult = union(PossibleResults) {
         }
     }
 };
+
+pub const ResultTag = enum {
+    FAIL,
+    OK,
+};
+
+pub fn Result(comptime T: type) type {
+    return union(ResultTag) {
+        FAIL,
+        OK: T,
+    };
+}
