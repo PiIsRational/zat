@@ -109,9 +109,7 @@ pub const SatInstance = struct {
 
     fn isSat(self: *Self) bool {
         for (self.clauses.clauses.items) |c| {
-            if (!c.isSatisfied(self)) {
-                return false;
-            }
+            assert(c.isSatisfied(self));
         }
 
         return true;
@@ -157,6 +155,7 @@ pub const SatInstance = struct {
         for (self.variables, 0..) |v, i| {
             if (v == .UNASSIGNED) {
                 _ = try self.set(i, .TEST_TRUE);
+                return;
             }
         }
     }
