@@ -17,6 +17,11 @@ pub const WatchList = struct {
     /// the initialization does go through each clause and supposes that no variable in the clause is assigned
     pub fn init(variables: usize, allocator: Allocator) !Self {
         var watches = try allocator.alloc(std.ArrayList(Watch), variables * 2);
+
+        for (watches) |*watchlist| {
+            watchlist.* = std.ArrayList(Watch).init(allocator);
+        }
+
         return WatchList{
             .initialized = false,
             .watches = watches,
