@@ -63,7 +63,7 @@ pub const InstanceBuilder = struct {
             }
         }
 
-        if (instance.clauseCount() < self.sat_type.clause_count) {
+        if (self.clause_num < self.sat_type.clause_count) {
             try self.parse_line(
                 currline,
                 &instance,
@@ -71,7 +71,8 @@ pub const InstanceBuilder = struct {
         }
 
         // wrong clause count
-        if (instance.clauseCount() != self.sat_type.clause_count) {
+        if (self.clause_num != self.sat_type.clause_count) {
+            std.debug.print("{} vs {}\n", .{ self.sat_type.clause_count, instance.clauseCount() });
             try stdout.print("(ERROR) Illegal Clause Count!\n", .{});
             return ParseError.IllegalClauseCount;
         }
@@ -180,6 +181,7 @@ pub const InstanceBuilder = struct {
             }
         }
 
+        self.clause_num += 1;
         var literals = self.trivialSimpl(self.literal_list.items);
         if (self.triviallyTrue(literals)) {
             return;
