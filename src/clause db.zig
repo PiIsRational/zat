@@ -35,7 +35,7 @@ pub const ClauseDb = struct {
     /// adds a clause containing `literals` to the clause database
     pub fn addClause(self: *Self, literals: []Literal) !Clause {
         var clause = try self.alloc(literals.len);
-        @memcpy(clause.getLiterals(), literals);
+        @memcpy(clause.getLiterals(self), literals);
 
         return clause;
     }
@@ -119,7 +119,7 @@ pub const ClauseDb = struct {
             },
         });
 
-        var header = &self.memory.items[self.memory.items.len - 1].header;
+        var header = self.memory.items.len - 1;
         self.memory.appendNTimesAssumeCapacity(MemCell{
             .literal = Literal.default(),
         }, size);
@@ -139,7 +139,7 @@ pub const ClauseDb = struct {
                 i += current.garbage.len;
             } else {
                 self.clauses.appendAssumeCapacity(
-                    Clause.fromHeader(&current.header),
+                    Clause.fromHeader(i),
                 );
                 i += current.header.len;
             }

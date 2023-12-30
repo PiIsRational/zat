@@ -45,6 +45,9 @@ pub const SatInstance = struct {
     ///
     /// iff was able to set returns true
     pub fn set(self: *Self, variable: usize, state: Variable) !bool {
+        // cannot set a variable to unassigned
+        std.debug.assert(state != .UNASSIGNED);
+
         if (self.variables[variable] == state) {
             return true;
         }
@@ -73,7 +76,7 @@ pub const SatInstance = struct {
     pub fn addClause(self: *Self, literals: []Literal) !void {
         // append a unit clause
         if (literals.len == 1) {
-            self.units.append(literals[1]);
+            try self.units.append(literals[1]);
             return;
         }
 
@@ -88,7 +91,10 @@ pub const SatInstance = struct {
         try self.watch.append(clause, [_]Literal{ literals[0], literals[1] });
     }
 
-    fn setUnits(self: *Self) !void {
+    /// set all the unit clauses
+    ///
+    /// returns true iff there was a conflict
+    fn setUnits(self: *Self) !bool {
         for (self.units) |to_set| {
             if (!try self.set(
                 to_set.variable,
@@ -98,15 +104,47 @@ pub const SatInstance = struct {
                     .FORCE_TRUE,
             )) {
                 // in this case there was a conflict
+                return true;
             }
         }
+
+        return false;
     }
 
-    fn isTrue(self: Self, literal: Literal) bool {
-        return literal.is_negated != self.variables[literal.variable].isTrue();
+    /// the method used to resolve a conflict in the assignement
+    /// (basic backtracking).
+    ///
+    /// iff returns true the backtracking was successful
+    fn resolve(self: *Self) bool {
+        while (self.setting_order.popOrNull()) |value| {
+            var variable = &self.variables[value];
+            if (!variable.isForce()) {
+                variable.setInverse();
+
+                // the current unit clauses lead to a problem
+                // so the assignements are all deleted
+                self.units.clearRetainingCapacity();
+                return true;
+            }
+
+            variable.* = .UNASSIGNED;
+        }
+
+        // the instance is unsat as the variable could not be found
+        return false;
     }
 
-    fn unassigned(self: Self, literal: Literal) bool {
+    pub fn isTrue(self: Self, literal: Literal) bool {
+        return !self.unassigned(literal) and
+            literal.is_negated == self.variables[literal.variable].isFalse();
+    }
+
+    pub fn isFalse(self: Self, literal: Literal) bool {
+        return !self.unassigned(literal) and
+            literal.is_negated == self.variables[literal.variable].isTrue();
+    }
+
+    pub fn unassigned(self: Self, literal: Literal) bool {
         return self.variables[literal.variable] == .UNASSIGNED;
     }
 

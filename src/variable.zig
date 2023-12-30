@@ -9,12 +9,19 @@ pub const Variable = enum(i8) {
 
     const Self = @This();
 
+    /// checks if the variable is forced or unassigned
     pub fn isForce(self: Self) bool {
-        return self == .FORCE_FALSE or self == .FORCE_TRUE;
+        return @intFromEnum(self) >> 1 == 1;
     }
 
+    /// checks if this variable is false or unassigned
     pub fn isTrue(self: Self) bool {
-        return self == .TEST_FALSE or self == .FORCE_TRUE;
+        return @intFromEnum(self) & 1 == 1;
+    }
+
+    /// checks if this variable is false
+    pub fn isFalse(self: Self) bool {
+        return @intFromEnum(self) & 1 == 1;
     }
 
     pub fn isEqual(self: Self, other: Self) bool {

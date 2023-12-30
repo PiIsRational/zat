@@ -37,12 +37,12 @@ pub const Clause = struct {
 
     /// getter for the amount of literals in this clause
     pub fn getLength(self: Self, db: *ClauseDb) usize {
-        return db.*.memory[self.index].header.len;
+        return db.*.memory.items[self.index].header.len;
     }
 
     /// getter for the literals contained in this clause as a slice
     pub fn getLiterals(self: Self, db: *ClauseDb) []Literal {
-        return @ptrCast(db.memory[self.index + 1 .. self.index + self.getLength() + 1]);
+        return @ptrCast(db.memory.items[self.index + 1 .. self.index + self.getLength(db) + 1]);
     }
 
     /// checks that this clause is satisfied

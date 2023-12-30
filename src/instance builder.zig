@@ -41,7 +41,7 @@ pub const InstanceBuilder = struct {
         defer self.deinit();
 
         var instance: SatInstance = undefined;
-        defer instance.watch.setUp(instance.clauses);
+        defer instance.watch.setUp(&instance.clauses);
 
         while (index < characters) {
             switch (buffer[index]) {

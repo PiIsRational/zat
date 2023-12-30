@@ -31,7 +31,7 @@ pub const WatchList = struct {
 
         // iterate through each clause and check if it is garbage or no
         for (db.*.items) |clause| {
-            if (clause.isGarbage()) {
+            if (clause.isGarbage(db)) {
                 continue;
             }
 
@@ -99,7 +99,7 @@ pub const WatchList = struct {
 
 const Watch = struct {
     blocking: Literal,
-    clause: *Clause,
+    clause: Clause,
 
     const Self = @This();
 
@@ -119,11 +119,11 @@ const Watch = struct {
             return false;
         }
 
-        var literals = self.clause.getLiterals();
+        var literals = self.clause.getLiterals(instance.clauses);
 
         // if the current watched literal is the first, switch it with the second one
         // as it will not be watched anymore
-        var other_watch = self.clause.getLiterals()[0];
+        var other_watch = self.clause.getLiterals(instance.clauses)[0];
         if (literal == other_watch) {
             std.mem.swap(Literal, &literals[0], &literals[1]);
             other_watch = literals[0];
