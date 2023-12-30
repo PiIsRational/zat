@@ -32,7 +32,7 @@ pub const Clause = struct {
 
     /// checks if this clause points to garbage in memory
     pub fn isGarbage(self: Self, db: *ClauseDb) bool {
-        return db.*.memory[self.index].header.is_garbage;
+        return db.*.memory.items[self.index].header.is_garbage;
     }
 
     /// getter for the amount of literals in this clause
@@ -57,9 +57,9 @@ pub const Clause = struct {
     }
 
     /// returns the reference to the memory behind this clause
-    pub fn getRef(self: Self, db: *ClauseDb) ClauseRef {
+    pub fn getRef(self: Self, db: *const ClauseDb) ClauseRef {
         return ClauseRef{
-            .header = db.clauses.items[self.index],
+            .header = @ptrCast(&db.*.memory.items[self.index]),
         };
     }
 };

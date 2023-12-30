@@ -24,22 +24,22 @@ pub const WatchList = struct {
         };
     }
 
-    pub fn setUp(self: *Self, db: *ClauseDb) void {
+    pub fn setUp(self: *Self, db: *ClauseDb) !void {
         if (self.initialized) {
             return;
         }
 
         // iterate through each clause and check if it is garbage or no
-        for (db.*.items) |clause| {
+        for (db.*.clauses.items) |clause| {
             if (clause.isGarbage(db)) {
                 continue;
             }
 
-            self.appendClause(
+            try self.append(
                 clause,
                 [_]Literal{
-                    clause.getLiterals()[0],
-                    clause.getLiterals()[1],
+                    clause.getLiterals(db)[0],
+                    clause.getLiterals(db)[1],
                 },
             );
         }

@@ -41,7 +41,6 @@ pub const InstanceBuilder = struct {
         defer self.deinit();
 
         var instance: SatInstance = undefined;
-        defer instance.watch.setUp(&instance.clauses);
 
         while (index < characters) {
             switch (buffer[index]) {
@@ -76,6 +75,8 @@ pub const InstanceBuilder = struct {
             try stdout.print("(ERROR) Illegal Clause Count!", .{});
             return ParseError.IllegalClauseCount;
         }
+
+        try instance.watch.setUp(&instance.clauses);
 
         try stdout.print("printing the clauses of the instance:\n", .{});
         try stdout.print("{s}\n", .{instance});
