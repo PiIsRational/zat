@@ -7,13 +7,9 @@ const MemoryCell = @import("mem cell.zig").MemoryCell;
 const SatInstance = @import("sat instance.zig").SatInstance;
 const ClauseDb = @import("clause db.zig").ClauseDb;
 
-/// the clause struct
+/// the Clause struct.
 ///
-/// it points to its section of the clause memory
-/// the first part of a clause is the clause header
-/// it contains the meta informations about the clause
-///
-/// after that the literals are stored in order
+/// it contains the index to the header of the corresponding clause in the clause memory
 pub const Clause = struct {
     index: usize,
     const Self = @This();
@@ -64,6 +60,13 @@ pub const Clause = struct {
     }
 };
 
+/// the clause ref struct
+///
+/// it points to its section of the clause memory
+/// the first part of a clause is the clause header
+/// it contains the meta informations about the clause
+///
+/// after that the literals are stored in order
 pub const ClauseRef = struct {
     header: [*]MemoryCell,
 
