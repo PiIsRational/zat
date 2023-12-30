@@ -9,7 +9,6 @@ const Result = @import("result.zig").Result;
 
 pub const WatchList = struct {
     watches: []std.ArrayList(Watch),
-    count: usize,
     initialized: bool,
     allocator: Allocator,
 
@@ -26,7 +25,6 @@ pub const WatchList = struct {
         }
 
         return WatchList{
-            .count = 0,
             .initialized = false,
             .watches = watches,
             .allocator = allocator,
@@ -44,7 +42,6 @@ pub const WatchList = struct {
 
             const lits = clause.getLiterals(db);
             assert(!lits[0].eql(lits[1]));
-            self.count += 1;
             try self.append(
                 clause,
                 [_]Literal{ lits[0], lits[1] },
@@ -60,34 +57,11 @@ pub const WatchList = struct {
     pub fn set(self: *Self, literal: Literal, instance: *SatInstance) !bool {
         const to_update = literal.negated();
         var watch_list = &self.watches[to_update.toIndex()].items;
-        const orig_len = watch_list.*.len;
-        var had_move = false;
+
         // cannot convert this to a for loop, as the watchlist length is updated during iteration
         var i: usize = 0;
         while (i < watch_list.*.len) : (i += 1) {
             var watch = &watch_list.*[i];
-
-            if (!watch.clause.getLiterals(&instance.*.clauses)[0].eql(to_update) and
-                !watch.clause.getLiterals(&instance.*.clauses)[1].eql(to_update))
-            {
-                std.debug.print(
-                    "\nFAIL:\nlit {s}\nclause {s}\nindex {}\nlength {}\norig len {}\nmove {}\ncnt {}\n\n",
-                    .{
-                        to_update,
-                        watch.clause.getRef(&instance.clauses),
-                        i,
-                        watch_list.*.len,
-                        orig_len,
-                        had_move,
-                        self.count,
-                    },
-                );
-                unreachable;
-            }
-
-            if (had_move) {
-                had_move = false;
-            }
 
             switch (try watch.set(to_update, instance)) {
                 .OK => |value| if (value) |new_literal| {
@@ -99,7 +73,6 @@ pub const WatchList = struct {
 
                     // because of the move the current value does update the value at index i
                     i -|= 1;
-                    had_move = true;
                 },
                 .FAIL => return true,
             }
