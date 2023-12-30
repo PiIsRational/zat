@@ -37,8 +37,31 @@ pub const SatInstance = struct {
     }
 
     pub fn solve(self: *Self) !SatResult {
-        _ = self;
         // first resolve unit clauses
+        if (self.setUnits()) {
+            if (!self.resolve()) {
+                return SatResult{
+                    .UNSAT = false,
+                };
+            }
+        }
+
+        // if the variable were all set without a conflict
+        // we have found a sitisfying result
+        if (self.setting_order.items.len == self.variables.len) {
+            return SatResult{
+                .SAT = self.variables,
+            };
+        }
+
+        // choose a variable to set
+        if (self.choose()) {
+            if (!self.resolve()) {
+                return SatResult{
+                    .UNSAT = false,
+                };
+            }
+        }
     }
 
     /// set `variable` to `state`.
@@ -123,6 +146,11 @@ pub const SatInstance = struct {
         self.units.clearRetainingCapacity();
 
         return false;
+    }
+
+    fn choose(self: *Self) bool {
+        _ = self;
+        return true;
     }
 
     /// the method used to resolve a conflict in the assignement
