@@ -72,7 +72,7 @@ pub const InstanceBuilder = struct {
 
         // wrong clause count
         if (instance.clauseCount() != self.sat_type.clause_count) {
-            try stdout.print("(ERROR) Illegal Clause Count!", .{});
+            try stdout.print("(ERROR) Illegal Clause Count!\n", .{});
             return ParseError.IllegalClauseCount;
         }
 

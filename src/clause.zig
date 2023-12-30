@@ -15,7 +15,7 @@ pub const Clause = struct {
     const Self = @This();
 
     /// sets the literals of
-    pub fn setLiterals(self: *Self, db: *ClauseDb, literals: []Literal) void {
+    pub fn setLiterals(self: *Self, db: *const ClauseDb, literals: []Literal) void {
         @memcpy(self.getLiterals(db), literals);
     }
 
@@ -27,27 +27,27 @@ pub const Clause = struct {
     }
 
     /// checks if this clause points to garbage in memory
-    pub fn isGarbage(self: Self, db: *ClauseDb) bool {
+    pub fn isGarbage(self: Self, db: *const ClauseDb) bool {
         return db.*.memory.items[self.index].header.is_garbage;
     }
 
     /// getter for the amount of literals in this clause
-    pub fn getLength(self: Self, db: *ClauseDb) usize {
+    pub fn getLength(self: Self, db: *const ClauseDb) usize {
         return db.*.memory.items[self.index].header.len;
     }
 
     /// getter for the literals contained in this clause as a const slice
-    pub fn getLiterals(self: Self, db: *ClauseDb) []const Literal {
+    pub fn getLiterals(self: Self, db: *const ClauseDb) []const Literal {
         return self.getLitsMut(db);
     }
 
     /// getter for the literals as a normal slice
-    pub fn getLitsMut(self: Self, db: *ClauseDb) []Literal {
+    pub fn getLitsMut(self: Self, db: *const ClauseDb) []Literal {
         return @ptrCast(db.memory.items[self.index + 1 .. self.index + self.getLength(db) + 1]);
     }
 
     /// checks that this clause is satisfied
-    pub fn isSatisfied(self: Self, instance: *SatInstance) bool {
+    pub fn isSatisfied(self: Self, instance: *const SatInstance) bool {
         for (self.getLiterals(&instance.*.clauses)) |lit| {
             if (instance.isTrue(lit)) {
                 return true;
@@ -60,7 +60,7 @@ pub const Clause = struct {
     /// returns the reference to the memory behind this clause
     pub fn getRef(self: Self, db: *const ClauseDb) ClauseRef {
         return ClauseRef{
-            .header = @ptrCast(&db.*.memory.items[self.index]),
+            .lits = self.getLiterals(db),
         };
     }
 };
@@ -73,18 +73,18 @@ pub const Clause = struct {
 ///
 /// after that the literals are stored in order
 pub const ClauseRef = struct {
-    header: [*]MemoryCell,
+    lits: []const Literal,
 
     const Self = @This();
 
     /// getter for the length of this clause
     pub fn getLength(self: Self) usize {
-        return @intCast(self.header[0].header.len);
+        return self.lits.len;
     }
 
     /// getter for the literals of this clause
-    pub fn getLiterals(self: Self) []Literal {
-        return @ptrCast(self.header[1 .. 1 + self.getLength()]);
+    pub fn getLiterals(self: Self) []const Literal {
+        return self.lits;
     }
 
     pub fn format(

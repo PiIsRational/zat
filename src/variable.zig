@@ -31,8 +31,8 @@ pub const Variable = enum(i8) {
         return self_true and other_true or !self_true and !other_true;
     }
 
-    pub fn setInverse(self: *Self) void {
-        self.* = switch (self.*) {
+    pub fn getInverse(self: Self) Variable {
+        return switch (self) {
             .TEST_FALSE => .FORCE_TRUE,
             .TEST_TRUE => .FORCE_FALSE,
             .FORCE_FALSE => .TEST_TRUE,

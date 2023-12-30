@@ -8,6 +8,7 @@ const SatResult = @import("result.zig").SatResult;
 const Literal = @import("literal.zig").Literal;
 const BinClauses = @import("binary clauses.zig").BinClauses;
 const WatchList = @import("watch.zig").WatchList;
+const ClauseRef = @import("clause.zig").ClauseRef;
 
 pub const SatInstance = struct {
     allocator: Allocator,
@@ -37,11 +38,15 @@ pub const SatInstance = struct {
 
     pub fn solve(self: *Self) !SatResult {
         while (true) {
-            std.debug.print("{s}\n", .{SatResult{ .SAT = self.variables }});
+            //std.debug.print("state {s}\n", .{SatResult{ .SAT = self.variables }});
+            //if (self.setting_order.items.len > 0) {
+            //    std.debug.print("choose: {s}{}\n", .{ self.variables[self.setting_order.getLast()], self.setting_order.getLast() + 1 });
+            //}
+            //std.debug.print("propagate: ({s})\n\n", .{ClauseRef{ .lits = self.units.items }});
 
             // first resolve unit clauses
             if (try self.setUnits()) {
-                if (!self.resolve()) {
+                if (!try self.resolve()) {
                     return SatResult.UNSAT;
                 }
             }
@@ -56,7 +61,7 @@ pub const SatInstance = struct {
 
             // choose a variable to set
             if (try self.choose()) {
-                if (!self.resolve()) {
+                if (!try self.resolve()) {
                     return SatResult.UNSAT;
                 }
             }
@@ -175,15 +180,25 @@ pub const SatInstance = struct {
     /// (basic backtracking).
     ///
     /// iff returns true the backtracking was successful
-    fn resolve(self: *Self) bool {
+    fn resolve(self: *Self) !bool {
+        //std.debug.print("{s}\n", .{SatResult{ .SAT = self.variables }});
         while (self.setting_order.popOrNull()) |value| {
             var variable = &self.variables[value];
             if (!variable.isForce()) {
-                variable.setInverse();
+                const new_state = variable.getInverse();
+                variable.* = .UNASSIGNED;
+                const result = try self.set(value, new_state);
+
+                // setting the variable did not work
+                if (!result) {
+                    continue;
+                }
 
                 // the current unit clauses lead to a problem
                 // so the assignements are all deleted
                 self.units.clearRetainingCapacity();
+
+                //std.debug.print("{s}\n\n", .{SatResult{ .SAT = self.variables }});
                 return true;
             }
 
