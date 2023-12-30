@@ -64,7 +64,7 @@ pub const SatInstance = struct {
     /// iff was able to set returns true
     pub fn set(self: *Self, variable: usize, state: Variable) !bool {
         // cannot set a variable to unassigned
-        std.debug.assert(state != .UNASSIGNED);
+        assert(state != .UNASSIGNED);
 
         if (self.variables[variable] == state) {
             return true;
@@ -77,7 +77,7 @@ pub const SatInstance = struct {
         self.variables[variable] = state;
         try self.setting_order.append(variable);
         return !try self.watch.set(Literal.init(
-            !state.isTrue(),
+            state.isFalse(),
             @intCast(variable),
         ), self);
     }

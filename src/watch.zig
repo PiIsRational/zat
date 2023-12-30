@@ -58,11 +58,18 @@ pub const WatchList = struct {
     ///
     /// iff there was an error returns true
     pub fn set(self: *Self, literal: Literal, instance: *SatInstance) !bool {
-        for (self.watches[literal.negated().toIndex()].items) |*watch| {
-            switch (try watch.set(literal, instance)) {
+        const to_update = literal.negated();
+        var watch_list = &self.watches[to_update.toIndex()].items;
+
+        // cannot convert this to a for loop, as the watchlist length is updated during iteration
+        var i: usize = 0;
+        while (i < watch_list.*.len) : (i += 1) {
+            var watch = &watch_list.*[i];
+
+            switch (try watch.set(to_update, instance)) {
                 .OK => |value| if (value) |new_literal| {
                     // the returns value is not null, so we need to move the watch
-                    try self.move(watch, literal, new_literal);
+                    try self.move(watch, to_update, new_literal);
                 },
                 .FAIL => return true,
             }
@@ -77,6 +84,8 @@ pub const WatchList = struct {
     /// Additionally they should not be negated.
     pub fn append(self: *Self, clause: Clause, literals: [2]Literal) !void {
         for (literals, 0..) |literal, i| {
+            assert(!literal.is_garbage);
+
             try self.addWatch(literal, Watch{
                 .blocking = literals[i ^ 1],
                 .clause = clause,
@@ -94,7 +103,7 @@ pub const WatchList = struct {
         self.allocator.free(self.watches);
     }
 
-    /// move a watch from one Literal to an other
+    /// move `watch` from `from` to `to`
     fn move(self: *Self, watch: *Watch, from: Literal, to: Literal) !void {
         try self.addWatch(to, watch.*);
         self.remove(watch, from);
@@ -102,11 +111,18 @@ pub const WatchList = struct {
 
     /// remove a watch from the watchlist of a given literal
     fn remove(self: *Self, watch: *Watch, literal: Literal) void {
+        // the watch should be in the watchlist of `literal`
+        assert(@intFromPtr(watch) >= @intFromPtr(&self.watches[literal.toIndex()].items[0]));
+        assert(@intFromPtr(watch) <=
+            @intFromPtr(&self.watches[literal.toIndex()].items[self.watches[literal.toIndex()].items.len - 1]));
+
         watch.* = self.watches[literal.toIndex()].pop();
     }
 
     /// add a watch to the watchlist of a literal
     fn addWatch(self: *Self, literal: Literal, watch: Watch) !void {
+        assert(watch.blocking.toIndex() < self.watches.len);
+
         try self.watches[literal.toIndex()].append(watch);
     }
 };
@@ -121,6 +137,9 @@ const Watch = struct {
     ///
     /// if returns non null the literal to watch is the returns value
     fn set(self: *Self, literal: Literal, instance: *SatInstance) !Result(?Literal) {
+        assert(!self.blocking.is_garbage);
+        assert(self.blocking.variable < instance.variables.len);
+
         // there are 3 cases:
         //
         // - the clause is assigned
@@ -146,6 +165,7 @@ const Watch = struct {
         // this watch is not needed anymore so we can update it for further needs
         // the blocking literal is set to be the other watch, as it is already known
         self.blocking = other_watch;
+        assert(self.blocking.variable < instance.variables.len);
 
         // check that the other watch is true, because of it is we are done as te clause
         // is satisfied. we check that the blocking literal is not the other watch as the

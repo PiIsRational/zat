@@ -14,7 +14,7 @@ pub const Variable = enum(i8) {
         return @intFromEnum(self) >> 1 == 1;
     }
 
-    /// checks if this variable is false or unassigned
+    /// true iff this variable is true or unassigned
     pub fn isTrue(self: Self) bool {
         return @intFromEnum(self) & 1 == 1;
     }
