@@ -43,7 +43,7 @@ pub const Clause = struct {
 
     /// checks that this clause is satisfied
     pub fn isSatisfied(self: Self, instance: *SatInstance) bool {
-        for (self.getLiterals(instance.clauses)) |lit| {
+        for (self.getLiterals(&instance.*.clauses)) |lit| {
             if (instance.isTrue(lit)) {
                 return true;
             }
