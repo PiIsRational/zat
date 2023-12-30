@@ -105,6 +105,7 @@ pub const WatchList = struct {
 
     /// move `watch` from `from` to `to`
     fn move(self: *Self, watch: *Watch, from: Literal, to: Literal) !void {
+        assert(!to.eql(from));
         try self.addWatch(to, watch.*);
         self.remove(watch, from);
     }
@@ -112,7 +113,14 @@ pub const WatchList = struct {
     /// remove a watch from the watchlist of a given literal
     fn remove(self: *Self, watch: *Watch, literal: Literal) void {
         // the watch should be in the watchlist of `literal`
-        assert(@intFromPtr(watch) >= @intFromPtr(&self.watches[literal.toIndex()].items[0]));
+        if (@intFromPtr(watch) < @intFromPtr(&self.watches[literal.toIndex()].items[0])) {
+            std.debug.print("{}\n{}\n\n", .{
+                @intFromPtr(watch),
+                @intFromPtr(&self.watches[literal.toIndex()].items[0]),
+            });
+            assert(false);
+        }
+
         assert(@intFromPtr(watch) <=
             @intFromPtr(&self.watches[literal.toIndex()].items[self.watches[literal.toIndex()].items.len - 1]));
 
@@ -178,11 +186,13 @@ const Watch = struct {
         for (literals[2..]) |*lit| {
             // if it is not a false literal we can watch it
             if (!instance.isFalse(lit.*)) {
+                const new_watch = lit.*;
+
                 // reorder the literals and return it because we do need to
                 // move this watch to the new watchlist
                 std.mem.swap(Literal, lit, &literals[1]);
 
-                return Result(?Literal){ .OK = lit.* };
+                return Result(?Literal){ .OK = new_watch };
             }
         }
 
