@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const Variable = @import("variable.zig").Variable;
 const Clause = @import("clause.zig").Clause;
@@ -188,16 +189,22 @@ pub const SatInstance = struct {
     }
 
     pub fn isTrue(self: Self, literal: Literal) bool {
+        assert(literal.variable < self.variables.len);
+
         return !self.unassigned(literal) and
             literal.is_negated == self.variables[literal.variable].isFalse();
     }
 
     pub fn isFalse(self: Self, literal: Literal) bool {
+        assert(literal.variable < self.variables.len);
+
         return !self.unassigned(literal) and
             literal.is_negated == self.variables[literal.variable].isTrue();
     }
 
     pub fn unassigned(self: Self, literal: Literal) bool {
+        assert(literal.variable < self.variables.len);
+
         return self.variables[literal.variable] == .UNASSIGNED;
     }
 
