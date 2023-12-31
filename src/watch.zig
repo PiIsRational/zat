@@ -63,6 +63,10 @@ pub const WatchList = struct {
         const to_update = literal.negated();
         var watch_list = &self.watches[to_update.toIndex()].items;
 
+        if (literal.variable == 11) {
+            std.debug.print("11\n", .{});
+        }
+
         // cannot convert this to a for loop, as the watchlist length is updated during iteration
         var i: usize = 0;
         while (i < watch_list.*.len) : (i +%= 1) {
@@ -76,7 +80,7 @@ pub const WatchList = struct {
                     // the returns value is not null, so we need to move the watch
                     try self.move(watch, to_update, new_literal);
 
-                    // because of the move the current value does update the value at index i
+                    // because of the move the value at index i is not watch anymore
                     i -%= 1;
                 },
                 .FAIL => return true,
@@ -191,9 +195,10 @@ const Watch = struct {
             std.mem.swap(Literal, &literals[0], &literals[1]);
             other_watch = literals[0];
         }
+
         assert(instance.watch.isWatched(self.clause, other_watch));
         assert(instance.watch.isWatched(self.clause, literal));
-        if (instance.isFalse(other_watch)) {
+        if (false and instance.isFalse(other_watch)) {
             std.debug.print("({s}) is a weird clause (watching {s})\n", .{ self.clause.getRef(&instance.clauses), literal });
             std.debug.print("Assignement: {s}\n", .{SatResult{ .SAT = instance.variables }});
             unreachable;
