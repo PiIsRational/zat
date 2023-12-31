@@ -57,6 +57,16 @@ pub const Clause = struct {
         return false;
     }
 
+    pub fn fullyAssigned(self: Self, instance: *const SatInstance) bool {
+        for (self.getLiterals(&instance.clauses)) |lit| {
+            if (instance.unassigned(lit)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     pub fn isUnit(self: Self, instance: *const SatInstance) bool {
         var found_unassigned = false;
 
