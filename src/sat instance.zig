@@ -79,7 +79,7 @@ pub const SatInstance = struct {
     ///
     /// iff was able to set returns true
     pub fn set(self: *Self, variable: usize, state: Variable) !bool {
-        if (variable == 13 and state.isTrue() and state != .UNASSIGNED) {
+        if ((variable == 3 or variable == 12 or variable == 8) and state.isTrue() and state != .UNASSIGNED) {
             self.debug = true;
         }
 

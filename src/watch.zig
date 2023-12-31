@@ -6,6 +6,8 @@ const Literal = @import("literal.zig").Literal;
 const ClauseDb = @import("clause db.zig").ClauseDb;
 const SatInstance = @import("sat instance.zig").SatInstance;
 const Result = @import("result.zig").Result;
+const SatResult = @import("result.zig").SatResult;
+const ClauseRef = @import("clause.zig").ClauseRef;
 
 pub const WatchList = struct {
     watches: []std.ArrayList(Watch),
@@ -63,7 +65,7 @@ pub const WatchList = struct {
 
         // cannot convert this to a for loop, as the watchlist length is updated during iteration
         var i: usize = 0;
-        while (i < watch_list.*.len) : (i += 1) {
+        while (i < watch_list.*.len) : (i +%= 1) {
             var watch = &watch_list.*[i];
 
             switch (try watch.set(to_update, instance)) {
@@ -75,7 +77,7 @@ pub const WatchList = struct {
                     try self.move(watch, to_update, new_literal);
 
                     // because of the move the current value does update the value at index i
-                    i -|= 1;
+                    i -%= 1;
                 },
                 .FAIL => return true,
             }
@@ -103,6 +105,16 @@ pub const WatchList = struct {
                 .clause = clause,
             });
         }
+    }
+
+    pub fn isWatched(self: Self, clause: Clause, literal: Literal) bool {
+        for (self.watches[literal.toIndex()].items) |w| {
+            if (w.clause.index == clause.index) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// the destructor of the struct
@@ -179,7 +191,13 @@ const Watch = struct {
             std.mem.swap(Literal, &literals[0], &literals[1]);
             other_watch = literals[0];
         }
-
+        assert(instance.watch.isWatched(self.clause, other_watch));
+        assert(instance.watch.isWatched(self.clause, literal));
+        if (instance.isFalse(other_watch)) {
+            std.debug.print("({s}) is a weird clause (watching {s})\n", .{ self.clause.getRef(&instance.clauses), literal });
+            std.debug.print("Assignement: {s}\n", .{SatResult{ .SAT = instance.variables }});
+            unreachable;
+        }
         assert(literals[1].eql(literal));
 
         // this watch is not needed anymore so we can update it for further needs
