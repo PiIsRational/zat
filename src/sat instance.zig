@@ -38,6 +38,12 @@ pub const SatInstance = struct {
 
     pub fn solve(self: *Self) !SatResult {
         while (true) {
+            std.debug.print("state {s}\n", .{SatResult{ .SAT = self.variables }});
+            if (self.setting_order.items.len > 0) {
+                std.debug.print("choose: {s}{}\n", .{ self.variables[self.setting_order.getLast()], self.setting_order.getLast() + 1 });
+            }
+            std.debug.print("propagate: ({s})\n\n", .{ClauseRef{ .lits = self.units_to_set.items }});
+
             // first resolve unit clauses
             if (try self.setUnits()) {
                 if (!try self.resolve()) {
@@ -48,12 +54,6 @@ pub const SatInstance = struct {
             // if the variable were all set without a conflict
             // we have found a sitisfying result
             if (self.setting_order.items.len == self.variables.len) {
-                std.debug.print("state {s}\n", .{SatResult{ .SAT = self.variables }});
-                if (self.setting_order.items.len > 0) {
-                    std.debug.print("choose: {s}{}\n", .{ self.variables[self.setting_order.getLast()], self.setting_order.getLast() + 1 });
-                }
-                std.debug.print("propagate: ({s})\n\n", .{ClauseRef{ .lits = self.units_to_set.items }});
-
                 assert(self.isSat());
 
                 return SatResult{ .SAT = self.variables };
@@ -119,7 +119,8 @@ pub const SatInstance = struct {
         }
 
         // normal clause
-        _ = try self.clauses.addClause(literals);
+        var c = try self.clauses.addClause(literals);
+        try self.watch.append(c, [_]Literal{ literals[0], literals[1] });
     }
 
     /// checks if the instance is currently satisfied
@@ -137,10 +138,7 @@ pub const SatInstance = struct {
     ///
     /// returns true iff there was a conflict
     fn setUnits(self: *Self) !bool {
-        var i: usize = 0;
-        while (i < self.units_to_set.items.len) : (i += 1) {
-            const to_set = self.units_to_set.items[i];
-
+        while (self.units_to_set.popOrNull()) |to_set| {
             if (!try self.set(
                 to_set.variable,
                 if (to_set.is_negated)
@@ -154,20 +152,20 @@ pub const SatInstance = struct {
 
             // now that the variable was set check implications
             for (self.binary_clauses.getImplied(to_set)) |to_add| {
-                if (!self.isFalse(to_add)) {
-                    if (self.unassigned(to_add)) {
-                        try self.addUnit(to_add);
-                    }
-                } else {
+                if (self.isFalse(to_add)) {
                     // if the literal is false we have a conflict
                     return true;
+                }
+
+                if (self.unassigned(to_add)) {
+                    try self.addUnit(to_add);
                 }
             }
         }
 
         // we managed to go through unit propagation without a conflict
-        // => the unit list can be cleared
-        self.units_to_set.clearRetainingCapacity();
+        // => the unit list should be empty
+        assert(self.units_to_set.items.len == 0);
 
         return false;
     }
@@ -191,24 +189,20 @@ pub const SatInstance = struct {
     ///
     /// iff returns true the backtracking was successful
     fn resolve(self: *Self) !bool {
-        //std.debug.print("{s}\n", .{SatResult{ .SAT = self.variables }});
+        // the current unit clauses did lead to a problem
+        self.units_to_set.clearRetainingCapacity();
+
         while (self.setting_order.popOrNull()) |value| {
             var variable = &self.variables[value];
+
             if (!variable.isForce()) {
                 const new_state = variable.getInverse();
-                variable.* = .UNASSIGNED;
-                const result = try self.set(value, new_state);
 
-                // setting the variable did not work
-                if (!result) {
+                variable.* = .UNASSIGNED;
+                if (!try self.set(value, new_state)) {
                     continue;
                 }
 
-                // the current unit clauses lead to a problem
-                // so the assignements are all deleted
-                self.units_to_set.clearRetainingCapacity();
-
-                //std.debug.print("{s}\n\n", .{SatResult{ .SAT = self.variables }});
                 return true;
             }
 

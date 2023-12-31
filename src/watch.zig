@@ -11,6 +11,7 @@ pub const WatchList = struct {
     watches: []std.ArrayList(Watch),
     initialized: bool,
     allocator: Allocator,
+    db: *ClauseDb,
 
     const Self = @This();
 
@@ -28,27 +29,29 @@ pub const WatchList = struct {
             .initialized = false,
             .watches = watches,
             .allocator = allocator,
+            .db = undefined,
         };
     }
 
     pub fn setUp(self: *Self, db: *ClauseDb) !void {
+        self.db = db;
         if (self.initialized) {
             return;
         }
 
-        // iterate through each clause and check if it is garbage or no
-        for (db.*.clauses.items) |clause| {
-            assert(!clause.isGarbage(db));
+        self.initialized = true;
 
-            const lits = clause.getLiterals(db);
+        // iterate through each clause and check if it is garbage or no
+        for (self.db.clauses.items) |clause| {
+            assert(!clause.isGarbage(self.db));
+
+            const lits = clause.getLiterals(self.db);
             assert(!lits[0].eql(lits[1]));
             try self.append(
                 clause,
                 [_]Literal{ lits[0], lits[1] },
             );
         }
-
-        self.initialized = true;
     }
 
     /// sets `literal` to true and checks for unit clauses
@@ -85,9 +88,15 @@ pub const WatchList = struct {
     ///
     /// The two given literals should be different variables and included in the clause.
     /// Additionally they should not be negated.
-    fn append(self: *Self, clause: Clause, literals: [2]Literal) !void {
+    pub fn append(self: *Self, clause: Clause, literals: [2]Literal) !void {
+        if (!self.initialized) {
+            return;
+        }
+
         for (literals, 0..) |literal, i| {
             assert(!literal.is_garbage);
+            assert(clause.getLiterals(self.db)[i].eql(literal) or
+                clause.getLiterals(self.db)[i ^ 1].eql(literal));
 
             try self.addWatch(literal, Watch{
                 .blocking = literals[i ^ 1],
@@ -167,10 +176,7 @@ const Watch = struct {
             other_watch = literals[0];
         }
 
-        if (!literals[1].eql(literal)) {
-            std.debug.print("\nFAIL:\nlit {s}\nclause {s}\n\n", .{ literal, self.clause.getRef(&instance.clauses) });
-            unreachable;
-        }
+        assert(literals[1].eql(literal));
 
         // this watch is not needed anymore so we can update it for further needs
         // the blocking literal is set to be the other watch, as it is already known
