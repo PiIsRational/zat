@@ -195,17 +195,11 @@ const Watch = struct {
         assert(instance.watch.isWatched(self.clause, other_watch));
         assert(instance.watch.isWatched(self.clause, literal));
 
-        // the other watch is false only if this watch has a conflict to be found in the unit assignements
-        //assert(!instance.isFalse(other_watch) or instance.isUnitAssignement(literal));
-        if (instance.isFalse(other_watch) and !instance.isLastChoice(literal) and !instance.isUnitAssignement(literal)) {
-            std.debug.print("({s}) is a weird clause (watching {s})\n", .{ self.clause.getRef(&instance.clauses), literal });
-            std.debug.print("Assignement: {s}\n", .{SatResult{ .SAT = instance.variables }});
-            for (instance.units_to_set.items) |u| {
-                std.debug.print("{s} ", .{u});
-            }
-            std.debug.print("\n", .{});
-            unreachable;
-        }
+        // check that the other watch is allowed to be false
+        assert(!instance.isFalse(other_watch) or
+            self.clause.fullyAssigned(instance) or
+            instance.isLastChoice(literal) or
+            instance.isUnitAssignement(literal));
         assert(literals[1].eql(literal));
 
         // this watch is not needed anymore so we can update it for further needs
