@@ -63,10 +63,6 @@ pub const WatchList = struct {
         const to_update = literal.negated();
         var watch_list = &self.watches[to_update.toIndex()].items;
 
-        if (literal.variable == 11) {
-            std.debug.print("11\n", .{});
-        }
-
         // cannot convert this to a for loop, as the watchlist length is updated during iteration
         var i: usize = 0;
         while (i < watch_list.*.len) : (i +%= 1) {
@@ -198,9 +194,16 @@ const Watch = struct {
 
         assert(instance.watch.isWatched(self.clause, other_watch));
         assert(instance.watch.isWatched(self.clause, literal));
-        if (false and instance.isFalse(other_watch)) {
+
+        // the other watch is false only if this watch has a conflict to be found in the unit assignements
+        //assert(!instance.isFalse(other_watch) or instance.isUnitAssignement(literal));
+        if (false and instance.isFalse(other_watch) and !instance.isUnitAssignement(literal) and instance.setting_order.getLastOrNull() != null) {
             std.debug.print("({s}) is a weird clause (watching {s})\n", .{ self.clause.getRef(&instance.clauses), literal });
             std.debug.print("Assignement: {s}\n", .{SatResult{ .SAT = instance.variables }});
+            for (instance.units_to_set.items) |u| {
+                std.debug.print("{s} ", .{u});
+            }
+            std.debug.print("\n", .{});
             unreachable;
         }
         assert(literals[1].eql(literal));

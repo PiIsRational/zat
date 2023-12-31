@@ -142,6 +142,19 @@ pub const SatInstance = struct {
         try self.watch.append(c, [_]Literal{ literals[0], literals[1] });
     }
 
+    /// this is a debugging method!
+    ///
+    /// it checks that a literal is in a unit assignement
+    pub fn isUnitAssignement(self: Self, literal: Literal) bool {
+        for (self.units_to_set.items) |unit| {
+            if (unit.eql(literal)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// checks if the instance is currently satisfied
     fn isSat(self: *Self) bool {
         for (self.clauses.clauses.items) |c| {
