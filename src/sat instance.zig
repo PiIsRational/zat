@@ -40,8 +40,8 @@ pub const SatInstance = struct {
 
     pub fn solve(self: *Self) !SatResult {
         while (true) {
-            if (false) {
-                self.debug = false;
+            if (self.debug) {
+                //if (self.units_to_set.items.len == 1 and self.units_to_set.items[0].eql(Literal.init(false, 16))) {
                 std.debug.print("state {s}\n", .{SatResult{ .SAT = self.variables }});
                 if (self.setting_order.items.len > 0) {
                     std.debug.print("choose: {s}{}\n", .{ self.variables[self.setting_order.getLast()], self.setting_order.getLast() + 1 });
@@ -49,6 +49,7 @@ pub const SatInstance = struct {
                 std.debug.print("propagate: ({s})\n", .{ClauseRef{ .lits = self.units_to_set.items }});
                 self.debug = true;
             }
+            self.debug = false;
 
             // first resolve unit clauses
             if (try self.setUnits()) {
@@ -78,6 +79,10 @@ pub const SatInstance = struct {
     ///
     /// iff was able to set returns true
     pub fn set(self: *Self, variable: usize, state: Variable) !bool {
+        if (variable == 13 and state.isTrue() and state != .UNASSIGNED) {
+            self.debug = true;
+        }
+
         // cannot set a variable to unassigned
         assert(state != .UNASSIGNED);
 
@@ -107,7 +112,9 @@ pub const SatInstance = struct {
         assert(!unit.is_garbage);
         assert(unit.variable < self.variables.len);
 
-        try self.units_to_set.append(unit);
+        if (!self.isTrue(unit)) {
+            try self.units_to_set.append(unit);
+        }
     }
 
     pub fn clauseCount(self: Self) usize {
@@ -139,6 +146,7 @@ pub const SatInstance = struct {
     fn isSat(self: *Self) bool {
         for (self.clauses.clauses.items) |c| {
             if (!c.isSatisfied(self)) {
+                std.debug.print("({s}) is unsat\n", .{c.getRef(&self.clauses)});
                 return false;
             }
         }
