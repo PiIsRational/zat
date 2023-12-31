@@ -205,7 +205,7 @@ const Watch = struct {
         }
 
         // if we did not find a second watch we got a unit clause
-        try instance.units.append(other_watch);
+        try instance.addUnit(other_watch);
 
         // no need to move this watch
         return Result(?Literal){ .OK = null };
