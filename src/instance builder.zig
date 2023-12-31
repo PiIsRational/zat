@@ -79,8 +79,8 @@ pub const InstanceBuilder = struct {
 
         try instance.watch.setUp(&instance.clauses);
 
-        try stdout.print("printing the clauses of the instance:\n", .{});
-        try stdout.print("{s}\n", .{instance});
+        //try stdout.print("printing the clauses of the instance:\n", .{});
+        //try stdout.print("{s}\n", .{instance});
 
         return instance;
     }

@@ -175,10 +175,6 @@ const Watch = struct {
         // first check that the blocking literal is assigned true
         // because if it is the case the clause is already satisfied
         if (instance.isTrue(self.blocking)) {
-            if (instance.debug) {
-                std.debug.print("({s}) is true\n", .{self.clause.getRef(&instance.clauses)});
-            }
-
             return Result(?Literal){ .OK = null };
         }
 
@@ -210,10 +206,6 @@ const Watch = struct {
         // is satisfied. we check that the blocking literal is not the other watch as the
         // blocking iteral is already known to be untrue.
         if (!self.blocking.eql(other_watch) and instance.isTrue(other_watch)) {
-            if (instance.debug) {
-                std.debug.print("({s}) is true\n", .{self.clause.getRef(&instance.clauses)});
-            }
-
             return Result(?Literal){ .OK = null };
         }
 
@@ -228,9 +220,6 @@ const Watch = struct {
                 // move this watch to the new watchlist
                 std.mem.swap(Literal, lit, &literals[1]);
 
-                if (instance.debug) {
-                    std.debug.print("({s}) gets updated from {s} to {s}\n", .{ self.clause.getRef(&instance.clauses), literal, new_watch });
-                }
                 return Result(?Literal){ .OK = new_watch };
             }
         }
@@ -238,19 +227,11 @@ const Watch = struct {
         // check that the other watched literal is not negated
         // if it is false we have a conflict
         if (instance.isFalse(other_watch)) {
-            if (instance.debug) {
-                std.debug.print("({s}) is false (FAIL)\n", .{self.clause.getRef(&instance.clauses)});
-            }
-
             return Result(?Literal).FAIL;
         }
 
         // if we did not find a second watch we got a unit clause
         try instance.addUnit(other_watch);
-
-        if (instance.debug) {
-            std.debug.print("({s}) has {s} unassigned\n", .{ self.clause.getRef(&instance.clauses), other_watch });
-        }
 
         // no need to move this watch
         return Result(?Literal){ .OK = null };
