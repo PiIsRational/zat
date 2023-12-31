@@ -197,7 +197,7 @@ const Watch = struct {
 
         // the other watch is false only if this watch has a conflict to be found in the unit assignements
         //assert(!instance.isFalse(other_watch) or instance.isUnitAssignement(literal));
-        if (false and instance.isFalse(other_watch) and !instance.isUnitAssignement(literal) and instance.setting_order.getLastOrNull() != null) {
+        if (instance.isFalse(other_watch) and !instance.isLastChoice(literal) and !instance.isUnitAssignement(literal)) {
             std.debug.print("({s}) is a weird clause (watching {s})\n", .{ self.clause.getRef(&instance.clauses), literal });
             std.debug.print("Assignement: {s}\n", .{SatResult{ .SAT = instance.variables }});
             for (instance.units_to_set.items) |u| {

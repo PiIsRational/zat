@@ -144,10 +144,28 @@ pub const SatInstance = struct {
 
     /// this is a debugging method!
     ///
-    /// it checks that a literal is in a unit assignement
+    /// it checks that `literal` is in a unit assignement
     pub fn isUnitAssignement(self: Self, literal: Literal) bool {
         for (self.units_to_set.items) |unit| {
             if (unit.eql(literal)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    ///this is a debugging method!
+    ///
+    /// it checks that `literal` is the last chosen assignement
+    pub fn isLastChoice(self: Self, literal: Literal) bool {
+        var i = self.setting_order.items.len;
+        while (i > 0) : (i -= 1) {
+            var current = self.setting_order.items[i - 1];
+            if (!self.variables[current].isForce() and
+                current == literal.variable and
+                self.variables[current].isFalse() == literal.is_negated)
+            {
                 return true;
             }
         }
