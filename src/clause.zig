@@ -57,6 +57,26 @@ pub const Clause = struct {
         return false;
     }
 
+    pub fn isUnit(self: Self, instance: *const SatInstance) bool {
+        var found_unassigned = false;
+
+        for (self.getLiterals(&instance.clauses)) |lit| {
+            if (instance.unassigned(lit)) {
+                if (found_unassigned) {
+                    return false;
+                }
+
+                found_unassigned = true;
+            }
+
+            if (instance.isTrue(lit)) {
+                return false;
+            }
+        }
+
+        return found_unassigned;
+    }
+
     /// returns the reference to the memory behind this clause
     pub fn getRef(self: Self, db: *const ClauseDb) ClauseRef {
         return ClauseRef{
