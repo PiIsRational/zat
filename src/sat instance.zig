@@ -18,6 +18,7 @@ pub const SatInstance = struct {
     variables: []Variable,
     setting_order: std.ArrayList(usize),
     units_to_set: std.ArrayList(Literal),
+    debug: bool,
 
     const Self = @This();
 
@@ -33,16 +34,21 @@ pub const SatInstance = struct {
             .variables = try allocator.alloc(Variable, variables),
             .setting_order = std.ArrayList(usize).init(allocator),
             .units_to_set = std.ArrayList(Literal).init(allocator),
+            .debug = false,
         };
     }
 
     pub fn solve(self: *Self) !SatResult {
         while (true) {
-            std.debug.print("state {s}\n", .{SatResult{ .SAT = self.variables }});
-            if (self.setting_order.items.len > 0) {
-                std.debug.print("choose: {s}{}\n", .{ self.variables[self.setting_order.getLast()], self.setting_order.getLast() + 1 });
+            if (false) {
+                self.debug = false;
+                std.debug.print("state {s}\n", .{SatResult{ .SAT = self.variables }});
+                if (self.setting_order.items.len > 0) {
+                    std.debug.print("choose: {s}{}\n", .{ self.variables[self.setting_order.getLast()], self.setting_order.getLast() + 1 });
+                }
+                std.debug.print("propagate: ({s})\n", .{ClauseRef{ .lits = self.units_to_set.items }});
+                self.debug = true;
             }
-            std.debug.print("propagate: ({s})\n\n", .{ClauseRef{ .lits = self.units_to_set.items }});
 
             // first resolve unit clauses
             if (try self.setUnits()) {
@@ -75,11 +81,17 @@ pub const SatInstance = struct {
         // cannot set a variable to unassigned
         assert(state != .UNASSIGNED);
 
-        if (self.variables[variable] == state) {
+        if (self.variables[variable].isEqual(state)) {
+            if (self.debug) {
+                std.debug.print("already set {s}{}\n", .{ state, variable + 1 });
+            }
             return true;
         }
 
         if (self.variables[variable] != .UNASSIGNED) {
+            if (self.debug) {
+                std.debug.print("{s}{} is not unassigned\n", .{ state, variable + 1 });
+            }
             return false;
         }
 
@@ -139,6 +151,9 @@ pub const SatInstance = struct {
     /// returns true iff there was a conflict
     fn setUnits(self: *Self) !bool {
         while (self.units_to_set.popOrNull()) |to_set| {
+            if (self.debug) {
+                std.debug.print("v\t{s}\to ({s})\n", .{ to_set, ClauseRef{ .lits = self.units_to_set.items } });
+            }
             if (!try self.set(
                 to_set.variable,
                 if (to_set.is_negated)
@@ -160,6 +175,9 @@ pub const SatInstance = struct {
                 if (self.unassigned(to_add)) {
                     try self.addUnit(to_add);
                 }
+            }
+            if (self.debug) {
+                std.debug.print("\t\to ({s})\n", .{ClauseRef{ .lits = self.units_to_set.items }});
             }
         }
 
@@ -197,6 +215,7 @@ pub const SatInstance = struct {
 
             if (!variable.isForce()) {
                 const new_state = variable.getInverse();
+                assert(new_state.isForce());
 
                 variable.* = .UNASSIGNED;
                 if (!try self.set(value, new_state)) {

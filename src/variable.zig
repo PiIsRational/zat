@@ -24,11 +24,10 @@ pub const Variable = enum(i8) {
         return @intFromEnum(self) & 1 == 0;
     }
 
+    /// check if two variables have an equal value
     pub fn isEqual(self: Self, other: Self) bool {
-        const self_true = self.isTrue();
-        const other_true = other.isForce();
-
-        return self_true and other_true or !self_true and !other_true;
+        return (self == .UNASSIGNED) == (other == .UNASSIGNED) and
+            self.isTrue() == other.isTrue();
     }
 
     pub fn getInverse(self: Self) Variable {
