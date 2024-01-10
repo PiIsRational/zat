@@ -31,6 +31,11 @@ pub const Clause = struct {
         return db.*.memory.items[self.index].header.is_garbage;
     }
 
+    /// checks if this clause points to nothing
+    pub fn isNull(self: Self) bool {
+        return self.index == 0;
+    }
+
     /// getter for the amount of literals in this clause
     pub fn getLength(self: Self, db: *const ClauseDb) usize {
         return db.*.memory.items[self.index].header.len;

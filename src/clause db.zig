@@ -5,6 +5,7 @@ const Clause = @import("clause.zig").Clause;
 const ClauseHeader = @import("clause.zig").ClauseHeader;
 const MemCell = @import("mem cell.zig").MemoryCell;
 const Garbage = @import("mem garbage.zig").Garbage;
+const GarbageHeader = @import("mem garbage.zig").GarbageHeader;
 
 /// ClauseDb is the database for all clauses with at least 3 literals
 pub const ClauseDb = struct {
@@ -23,10 +24,18 @@ pub const ClauseDb = struct {
 
     /// the constructor if the clause database
     pub fn init(allocator: Allocator, variables: usize) !Self {
+        // we want to alloc the first block of memory such that a clause
+        // with an index of zero can be used equivalently to a null pointer
+        var memory = std.ArrayList(MemCell).init(allocator);
+        try memory.append(MemCell{ .garbage = GarbageHeader{
+            .is_garbage = true,
+            .len = 0,
+        } });
+
         return ClauseDb{
             .clauses = std.ArrayList(Clause).init(allocator),
             .allocator = allocator,
-            .memory = std.ArrayList(MemCell).init(allocator),
+            .memory = memory,
             .fragmentation = 0,
             .free_list = try allocator.alloc(?*MemCell, variables + 1),
         };
