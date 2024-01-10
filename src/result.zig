@@ -1,5 +1,6 @@
 const std = @import("std");
 const Variable = @import("variable.zig").Variable;
+const Impls = @import("impl.zig").Impls;
 
 const PossibleResults = enum {
     UNSAT,
@@ -8,7 +9,7 @@ const PossibleResults = enum {
 
 pub const SatResult = union(PossibleResults) {
     UNSAT,
-    SAT: []Variable,
+    SAT: Impls,
 
     const Self = @This();
 
@@ -30,12 +31,12 @@ pub const SatResult = union(PossibleResults) {
 
         switch (self) {
             .SAT => |solution| {
-                for (solution, 1..) |var_state, var_num| {
+                for (solution.impls, 1..) |var_state, var_num| {
                     if (var_num != 1) {
                         try writer.print(" ", .{});
                     }
 
-                    try writer.print("{s}{}", .{ var_state, var_num });
+                    try writer.print("{s}{}", .{ var_state.variable, var_num });
                 }
             },
             .UNSAT => {},

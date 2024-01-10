@@ -6,6 +6,7 @@ const Literal = @import("literal.zig").Literal;
 const ClauseDb = @import("clause db.zig").ClauseDb;
 const BinClauses = @import("binary clauses.zig").BinClauses;
 const Helper = @import("helper.zig");
+const Impl = @import("impl.zig").Impl;
 
 const std = @import("std");
 const fs = std.fs;
@@ -106,7 +107,6 @@ pub const InstanceBuilder = struct {
                 try self.parse_p(line);
                 instance.* = try SatInstance.init(self.allocator, self.sat_type.variable_count);
                 self.lit_counts = try self.allocator.alloc(usize, self.sat_type.variable_count * 2);
-                @memset(instance.variables, .UNASSIGNED);
 
                 try stdout.print(
                     "c Parsed a SAT instance with {d} variables and {d} clauses.\n",
@@ -136,7 +136,7 @@ pub const InstanceBuilder = struct {
         for (line.items) |character| {
             if (parsing_num and is_whitespace(character)) {
                 parsing_num = false;
-                if (current_num > instance.variables.len) {
+                if (current_num > instance.variables.impls.len) {
                     std.debug.print("found a disallowed: {d}\n", .{current_num});
                     return ParseError.NonExistingVariableRef;
                 }

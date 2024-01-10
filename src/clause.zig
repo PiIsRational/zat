@@ -26,6 +26,13 @@ pub const Clause = struct {
         };
     }
 
+    /// returns a null clause (it points to nothing)
+    pub fn getNull() Clause {
+        return Clause{
+            .index = 0,
+        };
+    }
+
     /// checks if this clause points to garbage in memory
     pub fn isGarbage(self: Self, db: *const ClauseDb) bool {
         return db.*.memory.items[self.index].header.is_garbage;

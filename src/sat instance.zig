@@ -9,15 +9,17 @@ const Literal = @import("literal.zig").Literal;
 const BinClauses = @import("binary clauses.zig").BinClauses;
 const WatchList = @import("watch.zig").WatchList;
 const ClauseRef = @import("clause.zig").ClauseRef;
+const Impls = @import("impl.zig").Impls;
+const UnitSetting = @import("watch.zig").UnitSetting;
 
 pub const SatInstance = struct {
     allocator: Allocator,
     clauses: ClauseDb,
     binary_clauses: BinClauses,
     watch: WatchList,
-    variables: []Variable,
+    variables: Impls,
     setting_order: std.ArrayList(usize),
-    units_to_set: std.ArrayList(Literal),
+    units_to_set: std.ArrayList(UnitSetting),
 
     const Self = @This();
 
@@ -30,9 +32,9 @@ pub const SatInstance = struct {
             .clauses = try ClauseDb.init(allocator, variables),
             .binary_clauses = try BinClauses.init(allocator, variables),
             .watch = try WatchList.init(variables, allocator),
-            .variables = try allocator.alloc(Variable, variables),
+            .variables = try Impls.init(allocator, variables),
             .setting_order = std.ArrayList(usize).init(allocator),
-            .units_to_set = std.ArrayList(Literal).init(allocator),
+            .units_to_set = std.ArrayList(UnitSetting).init(allocator),
         };
     }
 
@@ -47,7 +49,7 @@ pub const SatInstance = struct {
 
             // if the variable were all set without a conflict
             // we have found a sitisfying result
-            if (self.setting_order.items.len == self.variables.len) {
+            if (self.setting_order.items.len == self.variables.impls.len) {
                 assert(self.isSat());
 
                 return SatResult{ .SAT = self.variables };
@@ -65,19 +67,19 @@ pub const SatInstance = struct {
     /// set `variable` to `state`.
     ///
     /// iff was able to set returns true
-    pub fn set(self: *Self, variable: usize, state: Variable) !bool {
+    pub fn set(self: *Self, variable: usize, state: Variable, reason: Clause) !bool {
         // cannot set a variable to unassigned
         assert(state != .UNASSIGNED);
 
-        if (self.variables[variable].isEqual(state)) {
+        if (self.variables.getVar(variable).isEqual(state)) {
             return true;
         }
 
-        if (self.variables[variable] != .UNASSIGNED) {
+        if (self.variables.getVar(variable).* != .UNASSIGNED) {
             return false;
         }
 
-        self.variables[variable] = state;
+        self.variables.set(variable, state, reason);
         try self.setting_order.append(variable);
         return !try self.watch.set(Literal.init(
             state.isFalse(),
@@ -85,11 +87,10 @@ pub const SatInstance = struct {
         ), self);
     }
 
-    pub fn addUnit(self: *Self, unit: Literal) !void {
-        assert(!unit.is_garbage);
-        assert(unit.variable < self.variables.len);
+    pub fn addUnit(self: *Self, unit: UnitSetting) !void {
+        assert(unit.to_set.isGood(self.variables));
 
-        if (!self.isTrue(unit)) {
+        if (!self.isTrue(unit.to_set)) {
             try self.units_to_set.append(unit);
         }
     }
@@ -104,7 +105,10 @@ pub const SatInstance = struct {
     pub fn addClause(self: *Self, literals: []Literal) !void {
         // append a unit clause
         if (literals.len == 1) {
-            try self.addUnit(literals[0]);
+            try self.addUnit(UnitSetting{
+                .to_set = literals[0],
+                .reason = Clause.getNull(),
+            });
             return;
         }
 
@@ -124,7 +128,7 @@ pub const SatInstance = struct {
     /// it checks that `literal` is in a unit assignement
     pub fn isUnitAssignement(self: Self, literal: Literal) bool {
         for (self.units_to_set.items) |unit| {
-            if (unit.eql(literal)) {
+            if (unit.to_set.eql(literal)) {
                 return true;
             }
         }
@@ -139,9 +143,9 @@ pub const SatInstance = struct {
         var i = self.setting_order.items.len;
         while (i > 0) : (i -= 1) {
             var current = self.setting_order.items[i - 1];
-            if (!self.variables[current].isForce() and
+            if (!self.variables.getVar(current).isForce() and
                 current == literal.variable and
-                self.variables[current].isFalse() == literal.is_negated)
+                self.variables.getVar(current).isFalse() == literal.is_negated)
             {
                 return true;
             }
@@ -167,25 +171,29 @@ pub const SatInstance = struct {
     fn setUnits(self: *Self) !bool {
         while (self.units_to_set.popOrNull()) |to_set| {
             if (!try self.set(
-                to_set.variable,
-                if (to_set.is_negated)
+                to_set.to_set.variable,
+                if (to_set.to_set.is_negated)
                     .FORCE_FALSE
                 else
                     .FORCE_TRUE,
+                to_set.reason,
             )) {
                 // in this case there was a conflict
                 return true;
             }
 
             // now that the variable was set check implications
-            for (self.binary_clauses.getImplied(to_set)) |to_add| {
+            for (self.binary_clauses.getImplied(to_set.to_set)) |to_add| {
                 if (self.isFalse(to_add)) {
                     // if the literal is false we have a conflict
                     return true;
                 }
 
-                if (self.unassigned(to_add)) {
-                    try self.addUnit(to_add);
+                if (!self.isTrue(to_add)) {
+                    try self.addUnit(UnitSetting{
+                        .to_set = to_add,
+                        .reason = to_set.reason,
+                    });
                 }
             }
         }
@@ -202,9 +210,10 @@ pub const SatInstance = struct {
     /// iff encountered an error returns true
     fn choose(self: *Self) !bool {
         // TODO: implement proper heuristics to make this work
-        for (self.variables, 0..) |v, i| {
-            if (v == .UNASSIGNED) {
-                return !try self.set(i, .TEST_TRUE);
+        for (self.variables.impls, 0..) |v, i| {
+            if (v.variable == .UNASSIGNED) {
+                // as there is no reason the reason and it is a test assignement choose any literal
+                return !try self.set(i, .TEST_TRUE, Clause.getNull());
             }
         }
 
@@ -220,14 +229,16 @@ pub const SatInstance = struct {
         self.units_to_set.clearRetainingCapacity();
 
         while (self.setting_order.popOrNull()) |value| {
-            var variable = &self.variables[value];
+            var variable = self.variables.getVar(value);
 
             if (!variable.isForce()) {
                 const new_state = variable.getInverse();
                 assert(new_state.isForce());
 
                 variable.* = .UNASSIGNED;
-                if (!try self.set(value, new_state)) {
+                // TODO: the given reason here is wrong (it is set because of a conflict)
+                // it should be fixed when implementing the CDCL
+                if (!try self.set(value, new_state, Clause.getNull())) {
                     continue;
                 }
 
@@ -242,23 +253,23 @@ pub const SatInstance = struct {
     }
 
     pub fn isTrue(self: Self, literal: Literal) bool {
-        assert(literal.variable < self.variables.len);
+        assert(literal.variable < self.variables.impls.len);
 
         return !self.unassigned(literal) and
-            literal.is_negated == self.variables[literal.variable].isFalse();
+            literal.is_negated == self.variables.getFromLit(literal).isFalse();
     }
 
     pub fn isFalse(self: Self, literal: Literal) bool {
-        assert(literal.variable < self.variables.len);
+        assert(literal.variable < self.variables.impls.len);
 
         return !self.unassigned(literal) and
-            literal.is_negated == self.variables[literal.variable].isTrue();
+            literal.is_negated == self.variables.getFromLit(literal).isTrue();
     }
 
     pub fn unassigned(self: Self, literal: Literal) bool {
-        assert(literal.variable < self.variables.len);
+        assert(literal.variable < self.variables.impls.len);
 
-        return self.variables[literal.variable] == .UNASSIGNED;
+        return self.variables.getFromLit(literal).* == .UNASSIGNED;
     }
 
     pub fn format(

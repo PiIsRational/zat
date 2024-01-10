@@ -1,5 +1,6 @@
 const std = @import("std");
 const assert = std.debug.assert;
+const Impls = @import("impl.zig").Impls;
 
 pub const Literal = packed struct {
     is_garbage: bool,
@@ -53,6 +54,11 @@ pub const Literal = packed struct {
             .is_negated = !self.is_negated,
             .variable = self.variable,
         };
+    }
+
+    /// this is a debugging method to check the sanity of literals
+    pub fn isGood(self: Self, impls: Impls) bool {
+        return !self.is_garbage and self.variable < impls.impls.len;
     }
 
     pub fn format(

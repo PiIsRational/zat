@@ -163,7 +163,7 @@ const Watch = struct {
     /// if returns non null the literal to watch is the returns value
     fn set(self: *Self, literal: Literal, instance: *SatInstance) !Result(?Literal) {
         assert(!self.blocking.is_garbage);
-        assert(self.blocking.variable < instance.variables.len);
+        assert(self.blocking.variable < instance.variables.impls.len);
 
         // there are 4 cases:
         //
@@ -231,9 +231,17 @@ const Watch = struct {
         }
 
         // if we did not find a second watch we got a unit clause
-        try instance.addUnit(other_watch);
+        try instance.addUnit(UnitSetting{
+            .to_set = other_watch,
+            .reason = self.clause,
+        });
 
         // no need to move this watch
         return Result(?Literal){ .OK = null };
     }
+};
+
+pub const UnitSetting = struct {
+    to_set: Literal,
+    reason: Clause,
 };
