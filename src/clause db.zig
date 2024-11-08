@@ -53,7 +53,7 @@ pub const ClauseDb = struct {
     pub fn alloc(self: *Self, size: usize) !Clause {
         std.debug.assert(size >= 3);
 
-        var clause = try self.allocEnd(@intCast(size));
+        const clause = try self.allocEnd(@intCast(size));
         try self.clauses.append(clause);
 
         return clause;
@@ -91,7 +91,7 @@ pub const ClauseDb = struct {
 
         var i: usize = 0;
         while (i < old_literals.items.len) : (i += 1) {
-            var current = &old_literals.items[i];
+            const current = &old_literals.items[i];
 
             if (current.header.is_garbage) {
                 i += current.garbage.len;
@@ -128,7 +128,7 @@ pub const ClauseDb = struct {
             },
         });
 
-        var header = self.memory.items.len - 1;
+        const header = self.memory.items.len - 1;
         self.memory.appendNTimesAssumeCapacity(MemCell{
             .literal = Literal.default(),
         }, size);
@@ -142,7 +142,7 @@ pub const ClauseDb = struct {
 
         var i: usize = 0;
         while (i < self.memory.items.len) : (i += 1) {
-            var current = &self.memory.items[i];
+            const current = &self.memory.items[i];
 
             if (current.header.is_garbage) {
                 i += current.garbage.len;

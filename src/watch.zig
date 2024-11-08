@@ -21,7 +21,7 @@ pub const WatchList = struct {
     ///
     /// the initialization does go through each clause and supposes that no variable in the clause is assigned
     pub fn init(variables: usize, allocator: Allocator) !Self {
-        var watches = try allocator.alloc(std.ArrayList(Watch), variables * 2);
+        const watches = try allocator.alloc(std.ArrayList(Watch), variables * 2);
 
         for (watches) |*watchlist| {
             watchlist.* = std.ArrayList(Watch).init(allocator);
@@ -49,10 +49,7 @@ pub const WatchList = struct {
 
             const lits = clause.getLiterals(self.db);
             assert(!lits[0].eql(lits[1]));
-            try self.append(
-                clause,
-                [_]Literal{ lits[0], lits[1] },
-            );
+            try self.append(clause, .{ lits[0], lits[1] });
         }
     }
 
@@ -61,7 +58,7 @@ pub const WatchList = struct {
     /// iff there was an error returns true
     pub fn set(self: *Self, literal: Literal, instance: *SatInstance) !bool {
         const to_update = literal.negated();
-        var watch_list = &self.watches[to_update.toIndex()].items;
+        const watch_list = &self.watches[to_update.toIndex()].items;
 
         // cannot convert this to a for loop, as the watchlist length is updated during iteration
         var i: usize = 0;

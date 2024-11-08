@@ -10,7 +10,7 @@ pub const Impls = struct {
     const Self = @This();
 
     pub fn init(allocator: Allocator, var_count: usize) !Self {
-        var impls = try allocator.alloc(Impl, var_count);
+        const impls = try allocator.alloc(Impl, var_count);
         @memset(impls, Impl.init());
         return Impls{
             .impls = impls,

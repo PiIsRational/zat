@@ -25,7 +25,7 @@ pub const InstanceBuilder = struct {
     pub fn load_from_file(allocator: Allocator, path: []const u8) !SatInstance {
         const stdout = std.io.getStdOut().writer();
         var reader = try fs.cwd().openFile(path, .{});
-        var buffer = try allocator.alloc(u8, BUFFER_SIZE);
+        const buffer = try allocator.alloc(u8, BUFFER_SIZE);
         defer allocator.free(buffer);
         var characters = try reader.read(buffer);
         var index: usize = 0;
@@ -182,7 +182,7 @@ pub const InstanceBuilder = struct {
         }
 
         self.clause_num += 1;
-        var literals = self.trivialSimpl(self.literal_list.items);
+        const literals = self.trivialSimpl(self.literal_list.items);
         if (self.triviallyTrue(literals)) {
             return;
         }
@@ -264,7 +264,7 @@ pub const InstanceBuilder = struct {
         var end: usize = literals.len;
 
         while (i < end) : (i += 1) {
-            var current = literals[i].toIndex();
+            const current = literals[i].toIndex();
             if (self.lit_counts[current] == 1) {
                 literals[i] = literals[end];
                 end -= 1;

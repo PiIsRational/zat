@@ -12,8 +12,8 @@ pub const MemoryCell = packed union {
 };
 
 test "attr invariance" {
-    var cell = MemoryCell{
-        .literal = Literal{
+    const cell: MemoryCell = .{
+        .literal = .{
             .is_garbage = true,
             .is_negated = false,
             .variable = 111111111,

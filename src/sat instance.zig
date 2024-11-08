@@ -119,7 +119,7 @@ pub const SatInstance = struct {
         }
 
         // normal clause
-        var c = try self.clauses.addClause(literals);
+        const c = try self.clauses.addClause(literals);
         try self.watch.append(c, [_]Literal{ literals[0], literals[1] });
     }
 
@@ -142,7 +142,7 @@ pub const SatInstance = struct {
     pub fn isLastChoice(self: Self, literal: Literal) bool {
         var i = self.setting_order.items.len;
         while (i > 0) : (i -= 1) {
-            var current = self.setting_order.items[i - 1];
+            const current = self.setting_order.items[i - 1];
             if (!self.variables.getVar(current).isForce() and
                 current == literal.variable and
                 self.variables.getVar(current).isFalse() == literal.is_negated)

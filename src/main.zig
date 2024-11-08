@@ -5,6 +5,7 @@ const fs = std.fs;
 const OpenError = fs.File.OpenError;
 const Allocator = std.mem.Allocator;
 
+const ERROR_EXIT = 1;
 const SAT_EXIT = 10;
 const UNSAT_EXIT = 20;
 
@@ -18,6 +19,7 @@ pub fn main() !void {
 
     if (args.len != 2) {
         try stdout.print("(ERROR) usage: ./SAT Test DPLL.exe <path>", .{});
+        std.posix.exit(ERROR_EXIT);
     }
 
     try stdout.print("c FILE: {s}\n", .{args[1]});
@@ -32,7 +34,7 @@ pub fn main() !void {
     }
 
     switch (result) {
-        .SAT => std.os.exit(SAT_EXIT),
-        .UNSAT => std.os.exit(UNSAT_EXIT),
+        .SAT => std.posix.exit(SAT_EXIT),
+        .UNSAT => std.posix.exit(UNSAT_EXIT),
     }
 }

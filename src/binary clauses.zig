@@ -10,7 +10,7 @@ pub const BinClauses = struct {
     const Self = @This();
 
     pub fn init(allocator: Allocator, variables: usize) !Self {
-        var impls = try allocator.alloc(std.ArrayList(Literal), 2 * variables);
+        const impls = try allocator.alloc(std.ArrayList(Literal), 2 * variables);
 
         for (impls) |*impl| {
             impl.* = std.ArrayList(Literal).init(allocator);
