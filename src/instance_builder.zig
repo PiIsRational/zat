@@ -1,15 +1,15 @@
 const Allocator = std.mem.Allocator;
-const SatInstance = @import("sat instance.zig").SatInstance;
+const SatInstance = @import("sat_instance.zig").SatInstance;
 const Clause = @import("clause.zig").Clause;
 const Variable = @import("variable.zig").Variable;
 const Literal = @import("literal.zig").Literal;
-const ClauseDb = @import("clause db.zig").ClauseDb;
-const BinClauses = @import("binary clauses.zig").BinClauses;
-const Helper = @import("helper.zig");
+const ClauseDb = @import("clause_db.zig").ClauseDb;
+const BinClauses = @import("binary_clauses.zig").BinClauses;
 const Impl = @import("impl.zig").Impl;
 
 const std = @import("std");
 const fs = std.fs;
+
 const BUFFER_SIZE = 10000;
 
 pub const InstanceBuilder = struct {

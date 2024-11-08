@@ -3,9 +3,9 @@ const Allocator = std.mem.Allocator;
 const Literal = @import("literal.zig").Literal;
 const Clause = @import("clause.zig").Clause;
 const ClauseHeader = @import("clause.zig").ClauseHeader;
-const MemCell = @import("mem cell.zig").MemoryCell;
-const Garbage = @import("mem garbage.zig").Garbage;
-const GarbageHeader = @import("mem garbage.zig").GarbageHeader;
+const MemCell = @import("mem_cell.zig").MemoryCell;
+const Garbage = @import("mem_garbage.zig").Garbage;
+const GarbageHeader = @import("mem_garbage.zig").GarbageHeader;
 
 /// ClauseDb is the database for all clauses with at least 3 literals
 pub const ClauseDb = struct {

@@ -2,7 +2,7 @@ const std = @import("std");
 const assert = std.debug.assert;
 const Literal = @import("literal.zig").Literal;
 const ClauseHeader = @import("clause.zig").ClauseHeader;
-const Garbage = @import("mem garbage.zig").GarbageHeader;
+const Garbage = @import("mem_garbage.zig").GarbageHeader;
 
 pub const MemoryCell = packed union {
     literal: Literal,

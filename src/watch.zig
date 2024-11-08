@@ -3,8 +3,8 @@ const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const Clause = @import("clause.zig").Clause;
 const Literal = @import("literal.zig").Literal;
-const ClauseDb = @import("clause db.zig").ClauseDb;
-const SatInstance = @import("sat instance.zig").SatInstance;
+const ClauseDb = @import("clause_db.zig").ClauseDb;
+const SatInstance = @import("sat_instance.zig").SatInstance;
 const Result = @import("result.zig").Result;
 const SatResult = @import("result.zig").SatResult;
 const ClauseRef = @import("clause.zig").ClauseRef;
@@ -19,7 +19,8 @@ pub const WatchList = struct {
 
     /// init creates a new watchlist and initializes it
     ///
-    /// the initialization does go through each clause and supposes that no variable in the clause is assigned
+    /// the initialization does go through each clause and
+    /// supposes that no variable in the clause is assigned
     pub fn init(variables: usize, allocator: Allocator) !Self {
         const watches = try allocator.alloc(std.ArrayList(Watch), variables * 2);
 
@@ -27,7 +28,7 @@ pub const WatchList = struct {
             watchlist.* = std.ArrayList(Watch).init(allocator);
         }
 
-        return WatchList{
+        return .{
             .initialized = false,
             .watches = watches,
             .allocator = allocator,
@@ -37,10 +38,8 @@ pub const WatchList = struct {
 
     pub fn setUp(self: *Self, db: *ClauseDb) !void {
         self.db = db;
-        if (self.initialized) {
-            return;
-        }
 
+        if (self.initialized) return;
         self.initialized = true;
 
         // iterate through each clause and check if it is garbage or no
@@ -62,19 +61,18 @@ pub const WatchList = struct {
 
         // cannot convert this to a for loop, as the watchlist length is updated during iteration
         var i: usize = 0;
-        while (i < watch_list.*.len) : (i +%= 1) {
+        while (i < watch_list.*.len) {
             var watch = &watch_list.*[i];
 
             switch (try watch.set(to_update, instance)) {
                 .OK => |value| if (value) |new_literal| {
                     // after setting the watch the new literal should be the first of the clause
-                    assert(watch.clause.getLiterals(&instance.*.clauses)[1].eql(new_literal));
+                    assert(watch.clause.getLiterals(&instance.clauses)[1].eql(new_literal));
 
                     // the returns value is not null, so we need to move the watch
                     try self.move(watch, to_update, new_literal);
-
-                    // because of the move the value at index i is not watch anymore
-                    i -%= 1;
+                } else {
+                    i += 1;
                 },
                 .FAIL => return true,
             }
@@ -106,9 +104,7 @@ pub const WatchList = struct {
 
     pub fn isWatched(self: Self, clause: Clause, literal: Literal) bool {
         for (self.watches[literal.toIndex()].items) |w| {
-            if (w.clause.index == clause.index) {
-                return true;
-            }
+            if (w.clause.index == clause.index) return true;
         }
 
         return false;
@@ -117,10 +113,7 @@ pub const WatchList = struct {
     /// the destructor of the struct
     pub fn deinit(self: *Self) void {
         self.initialized = false;
-        for (self.watches) |watch| {
-            watch.deinit();
-        }
-
+        for (self.watches) |watch| watch.deinit();
         self.allocator.free(self.watches);
     }
 
@@ -171,9 +164,7 @@ const Watch = struct {
 
         // first check that the blocking literal is assigned true
         // because if it is the case the clause is already satisfied
-        if (instance.isTrue(self.blocking)) {
-            return Result(?Literal){ .OK = null };
-        }
+        if (instance.isTrue(self.blocking)) return .{ .OK = null };
 
         var literals = self.clause.getLitsMut(&instance.clauses);
 
@@ -195,46 +186,41 @@ const Watch = struct {
             instance.isUnitAssignement(literal));
         assert(literals[1].eql(literal));
 
-        // this watch is not needed anymore so we can update it for further needs
-        // the blocking literal is set to be the other watch, as it is already known
-        self.blocking = other_watch;
-
-        // check that the other watch is true, because of it is we are done as te clause
+        // check that the other watch is true, because if it is, we are done as the clause
         // is satisfied. we check that the blocking literal is not the other watch as the
         // blocking iteral is already known to be untrue.
         if (!self.blocking.eql(other_watch) and instance.isTrue(other_watch)) {
-            return Result(?Literal){ .OK = null };
+            return .{ .OK = null };
         }
+
+        // this watch is not needed anymore so we can update it for further needs
+        // the blocking literal is set to be the other watch, as it is already known to be untrue
+        self.blocking = other_watch;
 
         // go through the other literals to find a new watch
         for (literals[2..]) |*lit| {
             // if it is not a false literal we can watch it
             if (!instance.isFalse(lit.*)) {
-                assert(!lit.*.eql(literal));
+                assert(!lit.eql(literal));
                 const new_watch = lit.*;
 
                 // reorder the literals and return it because we do need to
                 // move this watch to the new watchlist
                 std.mem.swap(Literal, lit, &literals[1]);
 
-                return Result(?Literal){ .OK = new_watch };
+                return .{ .OK = new_watch };
             }
         }
 
         // check that the other watched literal is not negated
         // if it is false we have a conflict
-        if (instance.isFalse(other_watch)) {
-            return Result(?Literal).FAIL;
-        }
+        if (instance.isFalse(other_watch)) return .FAIL;
 
         // if we did not find a second watch we got a unit clause
-        try instance.addUnit(UnitSetting{
-            .to_set = other_watch,
-            .reason = self.clause,
-        });
+        try instance.addUnit(.{ .to_set = other_watch, .reason = self.clause });
 
         // no need to move this watch
-        return Result(?Literal){ .OK = null };
+        return .{ .OK = null };
     }
 };
 

@@ -52,19 +52,11 @@ pub const Variable = enum(i8) {
 
     pub fn format(
         self: Self,
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
+        comptime _: []const u8,
+        _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        _ = options;
-        _ = fmt;
-
-        if (self.isFalse()) {
-            try writer.print("-", .{});
-        }
-
-        if (self == .UNASSIGNED) {
-            try writer.print("~", .{});
-        }
+        if (self.isFalse()) try writer.print("-", .{});
+        if (self == .UNASSIGNED) try writer.print("~", .{});
     }
 };

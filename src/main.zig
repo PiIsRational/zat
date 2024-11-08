@@ -1,6 +1,6 @@
 const std = @import("std");
-const SatInstance = @import("sat instance.zig").SatInstance;
-const InstanceBuilder = @import("instance builder.zig").InstanceBuilder;
+const SatInstance = @import("sat_instance.zig").SatInstance;
+const InstanceBuilder = @import("instance_builder.zig").InstanceBuilder;
 const fs = std.fs;
 const OpenError = fs.File.OpenError;
 const Allocator = std.mem.Allocator;

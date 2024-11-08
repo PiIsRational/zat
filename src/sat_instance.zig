@@ -3,10 +3,10 @@ const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const Variable = @import("variable.zig").Variable;
 const Clause = @import("clause.zig").Clause;
-const ClauseDb = @import("clause db.zig").ClauseDb;
+const ClauseDb = @import("clause_db.zig").ClauseDb;
 const SatResult = @import("result.zig").SatResult;
 const Literal = @import("literal.zig").Literal;
-const BinClauses = @import("binary clauses.zig").BinClauses;
+const BinClauses = @import("binary_clauses.zig").BinClauses;
 const WatchList = @import("watch.zig").WatchList;
 const ClauseRef = @import("clause.zig").ClauseRef;
 const Impls = @import("impl.zig").Impls;
@@ -27,7 +27,7 @@ pub const SatInstance = struct {
         allocator: Allocator,
         variables: usize,
     ) !SatInstance {
-        return SatInstance{
+        return .{
             .allocator = allocator,
             .clauses = try ClauseDb.init(allocator, variables),
             .binary_clauses = try BinClauses.init(allocator, variables),
@@ -41,26 +41,19 @@ pub const SatInstance = struct {
     pub fn solve(self: *Self) !SatResult {
         while (true) {
             // first resolve unit clauses
-            if (try self.setUnits()) {
-                if (!try self.resolve()) {
-                    return SatResult.UNSAT;
-                }
+            while (self.units_to_set.items.len > 0) {
+                if (try self.setUnits() and !try self.resolve()) return .UNSAT;
             }
 
             // if the variable were all set without a conflict
             // we have found a sitisfying result
             if (self.setting_order.items.len == self.variables.impls.len) {
                 assert(self.isSat());
-
-                return SatResult{ .SAT = self.variables };
+                return .{ .SAT = self.variables };
             }
 
             // choose a variable to set
-            if (try self.choose()) {
-                if (!try self.resolve()) {
-                    return SatResult.UNSAT;
-                }
-            }
+            if (try self.choose() and !try self.resolve()) return .UNSAT;
         }
     }
 
@@ -71,13 +64,10 @@ pub const SatInstance = struct {
         // cannot set a variable to unassigned
         assert(state != .UNASSIGNED);
 
-        if (self.variables.getVar(variable).isEqual(state)) {
-            return true;
-        }
+        const var_ptr = self.variables.getVar(variable);
 
-        if (self.variables.getVar(variable).* != .UNASSIGNED) {
-            return false;
-        }
+        if (var_ptr.isEqual(state)) return true;
+        if (var_ptr.* != .UNASSIGNED) return false;
 
         self.variables.set(variable, state, reason);
         try self.setting_order.append(variable);
@@ -90,9 +80,7 @@ pub const SatInstance = struct {
     pub fn addUnit(self: *Self, unit: UnitSetting) !void {
         assert(unit.to_set.isGood(self.variables));
 
-        if (!self.isTrue(unit.to_set)) {
-            try self.units_to_set.append(unit);
-        }
+        if (!self.isTrue(unit.to_set)) try self.units_to_set.append(unit);
     }
 
     pub fn clauseCount(self: Self) usize {
@@ -105,10 +93,7 @@ pub const SatInstance = struct {
     pub fn addClause(self: *Self, literals: []Literal) !void {
         // append a unit clause
         if (literals.len == 1) {
-            try self.addUnit(UnitSetting{
-                .to_set = literals[0],
-                .reason = Clause.getNull(),
-            });
+            try self.addUnit(.{ .to_set = literals[0], .reason = Clause.getNull() });
             return;
         }
 
@@ -120,7 +105,7 @@ pub const SatInstance = struct {
 
         // normal clause
         const c = try self.clauses.addClause(literals);
-        try self.watch.append(c, [_]Literal{ literals[0], literals[1] });
+        try self.watch.append(c, .{ literals[0], literals[1] });
     }
 
     /// this is a debugging method!
@@ -128,9 +113,7 @@ pub const SatInstance = struct {
     /// it checks that `literal` is in a unit assignement
     pub fn isUnitAssignement(self: Self, literal: Literal) bool {
         for (self.units_to_set.items) |unit| {
-            if (unit.to_set.eql(literal)) {
-                return true;
-            }
+            if (unit.to_set.eql(literal)) return true;
         }
 
         return false;
@@ -157,9 +140,7 @@ pub const SatInstance = struct {
     /// checks if the instance is currently satisfied
     fn isSat(self: *Self) bool {
         for (self.clauses.clauses.items) |c| {
-            if (!c.isSatisfied(self)) {
-                return false;
-            }
+            if (!c.isSatisfied(self)) return false;
         }
 
         return true;
@@ -184,16 +165,11 @@ pub const SatInstance = struct {
 
             // now that the variable was set check implications
             for (self.binary_clauses.getImplied(to_set.to_set)) |to_add| {
-                if (self.isFalse(to_add)) {
-                    // if the literal is false we have a conflict
-                    return true;
-                }
+                // if the literal is false we have a conflict
+                if (self.isFalse(to_add)) return true;
 
                 if (!self.isTrue(to_add)) {
-                    try self.addUnit(UnitSetting{
-                        .to_set = to_add,
-                        .reason = to_set.reason,
-                    });
+                    try self.addUnit(.{ .to_set = to_add, .reason = to_set.reason });
                 }
             }
         }
@@ -209,12 +185,16 @@ pub const SatInstance = struct {
     ///
     /// iff encountered an error returns true
     fn choose(self: *Self) !bool {
+        assert(self.units_to_set.items.len == 0);
+
         // TODO: implement proper heuristics to make this work
         for (self.variables.impls, 0..) |v, i| {
-            if (v.variable == .UNASSIGNED) {
-                // as there is no reason the reason and it is a test assignement choose any literal
-                return !try self.set(i, .TEST_TRUE, Clause.getNull());
-            }
+            if (v.variable != .UNASSIGNED) continue;
+
+            // as there is no reason the reason and
+            // it is a test assignement choose any literal
+            const res = !try self.set(i, .TEST_TRUE, Clause.getNull());
+            return res;
         }
 
         return true;
@@ -228,7 +208,9 @@ pub const SatInstance = struct {
         // the current unit clauses did lead to a problem
         self.units_to_set.clearRetainingCapacity();
 
+        var i: usize = 0;
         while (self.setting_order.popOrNull()) |value| {
+            i += 1;
             var variable = self.variables.getVar(value);
 
             if (!variable.isForce()) {
@@ -236,11 +218,10 @@ pub const SatInstance = struct {
                 assert(new_state.isForce());
 
                 variable.* = .UNASSIGNED;
-                // TODO: the given reason here is wrong (it is set because of a conflict)
+                // TODO: the given reason here is wrong
+                // (it is set because of a conflict)
                 // it should be fixed when implementing the CDCL
-                if (!try self.set(value, new_state, Clause.getNull())) {
-                    continue;
-                }
+                if (!try self.set(value, new_state, Clause.getNull())) continue;
 
                 return true;
             }
@@ -250,6 +231,18 @@ pub const SatInstance = struct {
 
         // the instance is unsat as the variable could not be found
         return false;
+    }
+
+    fn debugSettingOrder(self: Self) void {
+        std.debug.print("{{ ", .{});
+        if (self.setting_order.items.len >= 1) {
+            const first = self.setting_order.items[0];
+            std.debug.print("{s}{d}", .{ self.variables.getVar(first), first });
+            for (self.setting_order.items[1..]) |next| {
+                std.debug.print(", {s}{d}", .{ self.variables.getVar(next), next });
+            }
+        }
+        std.debug.print(" }}\n", .{});
     }
 
     pub fn isTrue(self: Self, literal: Literal) bool {
@@ -274,25 +267,20 @@ pub const SatInstance = struct {
 
     pub fn format(
         self: Self,
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
+        comptime _: []const u8,
+        _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        _ = options;
-        _ = fmt;
+        const clauses = self.clauses.clauses.items;
+        if (clauses.len >= 1) {
+            try writer.print("({s})", .{clauses[0].getRef(&self.clauses)});
 
-        for (self.clauses.clauses.items, 0..) |clause, i| {
-            if (i != 0) {
-                try writer.print(" & ", .{});
+            for (clauses[1..]) |clause| {
+                try writer.print(" & ({s})", .{clause.getRef(&self.clauses)});
             }
-
-            try writer.print("({s})", .{clause.getRef(&self.clauses)});
         }
 
-        if (self.binary_clauses.len == 0) {
-            return;
-        }
-
+        if (self.binary_clauses.len == 0) return;
         try writer.print("\n{s}", .{self.binary_clauses});
     }
 

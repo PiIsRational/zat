@@ -1,11 +1,11 @@
 const std = @import("std");
-const GarbageFlag = @import("mem cell.zig").GarbageFlag;
-const LiteralFlag = @import("mem cell.zig").LiteralFlag;
+const GarbageFlag = @import("mem_cell.zig").GarbageFlag;
+const LiteralFlag = @import("mem_cell.zig").LiteralFlag;
 const Literal = @import("literal.zig").Literal;
 const Variable = @import("variable.zig").Variable;
-const MemoryCell = @import("mem cell.zig").MemoryCell;
-const SatInstance = @import("sat instance.zig").SatInstance;
-const ClauseDb = @import("clause db.zig").ClauseDb;
+const MemoryCell = @import("mem_cell.zig").MemoryCell;
+const SatInstance = @import("sat_instance.zig").SatInstance;
+const ClauseDb = @import("clause_db.zig").ClauseDb;
 
 /// the Clause struct.
 ///

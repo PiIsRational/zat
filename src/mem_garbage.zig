@@ -1,4 +1,4 @@
-const memc = @import("mem cell.zig");
+const memc = @import("mem_cell.zig");
 const GarbageFlag = memc.GarbageFlag;
 const VariableFlag = memc.LiteralFlag;
 
