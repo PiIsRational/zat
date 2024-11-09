@@ -10,7 +10,7 @@ pub const Literal = packed struct {
     const Self = @This();
 
     pub fn init(is_negated: bool, variable: u30) Literal {
-        return Literal{
+        return .{
             .is_negated = is_negated,
             .is_garbage = false,
             .variable = variable,
@@ -18,7 +18,7 @@ pub const Literal = packed struct {
     }
 
     pub fn fromIndex(index: usize) Literal {
-        return Literal{
+        return .{
             .is_garbage = false,
             .is_negated = index & 1 == 1,
             .variable = @intCast(index >> 1),
@@ -26,7 +26,7 @@ pub const Literal = packed struct {
     }
 
     pub fn default() Literal {
-        return Literal{
+        return .{
             .is_garbage = false,
             .is_negated = false,
             .variable = 0,
@@ -49,7 +49,7 @@ pub const Literal = packed struct {
 
     /// returns the negated version of this literal
     pub fn negated(self: Self) Self {
-        return Literal{
+        return .{
             .is_garbage = false,
             .is_negated = !self.is_negated,
             .variable = self.variable,
@@ -63,13 +63,10 @@ pub const Literal = packed struct {
 
     pub fn format(
         self: Self,
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
+        comptime _: []const u8,
+        _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        _ = options;
-        _ = fmt;
-
         const sign = if (self.is_negated) "-" else "";
 
         try writer.print("{s}{}", .{ sign, self.variable + 1 });

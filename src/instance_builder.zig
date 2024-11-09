@@ -1,4 +1,7 @@
+const std = @import("std");
 const Allocator = std.mem.Allocator;
+const fs = std.fs;
+
 const SatInstance = @import("sat_instance.zig").SatInstance;
 const Clause = @import("clause.zig").Clause;
 const Variable = @import("variable.zig").Variable;
@@ -6,9 +9,6 @@ const Literal = @import("literal.zig").Literal;
 const ClauseDb = @import("clause_db.zig").ClauseDb;
 const BinClauses = @import("binary_clauses.zig").BinClauses;
 const Impl = @import("impl.zig").Impl;
-
-const std = @import("std");
-const fs = std.fs;
 
 const BUFFER_SIZE = 10000;
 
@@ -22,7 +22,7 @@ pub const InstanceBuilder = struct {
 
     const Self = @This();
 
-    pub fn load_from_file(allocator: Allocator, path: []const u8) !SatInstance {
+    pub fn loadFromFile(allocator: Allocator, path: []const u8) !SatInstance {
         const stdout = std.io.getStdOut().writer();
         var reader = try fs.cwd().openFile(path, .{});
         const buffer = try allocator.alloc(u8, BUFFER_SIZE);
@@ -46,10 +46,7 @@ pub const InstanceBuilder = struct {
         while (index < characters) {
             switch (buffer[index]) {
                 '\n' => {
-                    try self.parse_line(
-                        currline,
-                        &instance,
-                    );
+                    try self.parseLine(currline, &instance);
                     currline.clearRetainingCapacity();
                 },
                 else => {
@@ -65,28 +62,21 @@ pub const InstanceBuilder = struct {
         }
 
         if (self.clause_num < self.sat_type.clause_count) {
-            try self.parse_line(
-                currline,
-                &instance,
-            );
+            try self.parseLine(currline, &instance);
         }
 
         // wrong clause count
         if (self.clause_num != self.sat_type.clause_count) {
-            std.debug.print("{} vs {}\n", .{ self.sat_type.clause_count, instance.clauseCount() });
             try stdout.print("(ERROR) Illegal Clause Count!\n", .{});
             return ParseError.IllegalClauseCount;
         }
 
         try instance.watch.setUp(&instance.clauses);
 
-        //try stdout.print("printing the clauses of the instance:\n", .{});
-        //try stdout.print("{s}\n", .{instance});
-
         return instance;
     }
 
-    fn parse_line(
+    fn parseLine(
         self: *InstanceBuilder,
         line: std.ArrayList(u8),
         instance: *SatInstance,
@@ -94,68 +84,56 @@ pub const InstanceBuilder = struct {
         const stdout = std.io.getStdOut().writer();
 
         if (line.items.len == 0) {
-            try self.parse_clause(
-                line,
-                instance,
-            );
+            try self.parseClause(line, instance);
             return;
         }
 
         switch (line.items[0]) {
             'c' => {},
             'p' => {
-                try self.parse_p(line);
-                instance.* = try SatInstance.init(self.allocator, self.sat_type.variable_count);
-                self.lit_counts = try self.allocator.alloc(usize, self.sat_type.variable_count * 2);
+                try self.parseP(line);
+                instance.* = try SatInstance
+                    .init(self.allocator, self.sat_type.variable_count);
+                self.lit_counts = try self.allocator
+                    .alloc(usize, self.sat_type.variable_count * 2);
 
                 try stdout.print(
                     "c Parsed a SAT instance with {d} variables and {d} clauses.\n",
                     .{ self.sat_type.variable_count, self.sat_type.clause_count },
                 );
             },
-            else => try self.parse_clause(
-                line,
-                instance,
-            ),
+            else => try self.parseClause(line, instance),
         }
     }
 
-    fn parse_clause(
+    fn parseClause(
         self: *InstanceBuilder,
         line: std.ArrayList(u8),
         instance: *SatInstance,
     ) !void {
-        if (instance.clauseCount() == self.sat_type.clause_count) {
-            return;
-        }
+        if (instance.clauseCount() == self.sat_type.clause_count) return;
 
         self.literal_list.clearRetainingCapacity();
         var parsing_num = false;
         var current_num: u30 = 1;
         var neg: bool = false;
         for (line.items) |character| {
-            if (parsing_num and is_whitespace(character)) {
+            if (parsing_num and isWhitespace(character)) {
                 parsing_num = false;
                 if (current_num > instance.variables.impls.len) {
                     std.debug.print("found a disallowed: {d}\n", .{current_num});
                     return ParseError.NonExistingVariableRef;
                 }
 
-                if (current_num == 0) {
-                    break;
-                }
+                if (current_num == 0) break;
 
-                try self.literal_list.append(Literal.init(
-                    neg,
-                    current_num - 1,
-                ));
-
+                try self.literal_list.append(Literal.init(neg, current_num - 1));
                 current_num = 1;
                 neg = false;
             }
 
             if (parsing_num) {
-                if (!is_num(character)) {
+                if (!isNum(character)) {
                     std.debug.print("found a disallowed: ({c})\n", .{character});
                     return ParseError.NotaDigit;
                 }
@@ -164,7 +142,7 @@ pub const InstanceBuilder = struct {
                 current_num += @intCast(character - '0');
             }
 
-            if (!parsing_num and (character == '-' or is_num(character))) {
+            if (!parsing_num and (character == '-' or isNum(character))) {
                 parsing_num = true;
 
                 if (character == '-') {
@@ -175,7 +153,7 @@ pub const InstanceBuilder = struct {
                 }
             }
 
-            if (!parsing_num and !is_whitespace(character)) {
+            if (!parsing_num and !isWhitespace(character)) {
                 std.debug.print("found a disallowed: {c}\n", .{character});
                 return ParseError.UnexpectedCharacter;
             }
@@ -183,25 +161,21 @@ pub const InstanceBuilder = struct {
 
         self.clause_num += 1;
         const literals = self.trivialSimpl(self.literal_list.items);
-        if (self.triviallyTrue(literals)) {
-            return;
-        }
 
+        if (self.triviallyTrue(literals)) return;
         try instance.addClause(literals);
     }
 
-    fn is_whitespace(character: u8) bool {
+    fn isWhitespace(character: u8) bool {
         return character == ' ' or character == '\t' or character == '\r';
     }
 
-    fn is_num(character: u8) bool {
+    fn isNum(character: u8) bool {
         return character >= '0' and character <= '9';
     }
 
-    fn parse_p(self: *InstanceBuilder, line: std.ArrayList(u8)) !void {
-        if (!std.mem.eql(u8, line.items[0..5], "p cnf")) {
-            return ParseError.IllegalHeader;
-        }
+    fn parseP(self: *InstanceBuilder, line: std.ArrayList(u8)) !void {
+        if (!std.mem.eql(u8, line.items[0..5], "p cnf")) return ParseError.IllegalHeader;
 
         var var_count: usize = undefined;
         var clause_count: usize = undefined;
@@ -220,13 +194,13 @@ pub const InstanceBuilder = struct {
 
         for (line.items[6..end], 6..) |char, i| {
             if (!parsing) {
-                if (is_num(char)) {
+                if (isNum(char)) {
                     parsing = true;
                     num_start = i;
-                } else if (!is_whitespace(char)) {
+                } else if (!isWhitespace(char)) {
                     return ParseError.UnexpectedCharacter;
                 }
-            } else if (parsing and is_whitespace(char)) {
+            } else if (parsing and isWhitespace(char)) {
                 if (parsing_var_count) {
                     var_count = try std.fmt.parseInt(usize, line.items[num_start..i], 0);
                     parsing_var_count = false;
@@ -235,26 +209,19 @@ pub const InstanceBuilder = struct {
                     break;
                 }
                 parsing = false;
-            } else if (parsing and !is_num(char)) {
+            } else if (parsing and !isNum(char)) {
                 return ParseError.NotaDigit;
             }
 
             if (parsing and i == end - 1) {
                 clause_count = try std.fmt.parseInt(usize, line.items[num_start..end], 0);
-                if (parsing_var_count) {
-                    return ParseError.UnknownFormat;
-                }
+                if (parsing_var_count) return ParseError.UnknownFormat;
             }
         }
 
-        if (parsing_var_count) {
-            return ParseError.UnknownFormat;
-        }
+        if (parsing_var_count) return ParseError.UnknownFormat;
 
-        self.sat_type = SatData{
-            .variable_count = var_count,
-            .clause_count = clause_count,
-        };
+        self.sat_type = .{ .variable_count = var_count, .clause_count = clause_count };
     }
 
     /// Removes doubled literals from clauses.
@@ -280,10 +247,7 @@ pub const InstanceBuilder = struct {
     ///
     /// (it contains the negated and non negated literal of a variable)
     fn triviallyTrue(self: *Self, literals: []Literal) bool {
-        if (literals.len == 0) {
-            return true;
-        }
-
+        if (literals.len == 0) return true;
         @memset(self.lit_counts, 0);
 
         for (literals) |lit| {

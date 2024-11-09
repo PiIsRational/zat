@@ -7,42 +7,46 @@ const Clause = @import("clause.zig").Clause;
 pub const Impls = struct {
     impls: []Impl,
 
-    const Self = @This();
-
-    pub fn init(allocator: Allocator, var_count: usize) !Self {
+    pub fn init(allocator: Allocator, var_count: usize) !Impls {
         const impls = try allocator.alloc(Impl, var_count);
         @memset(impls, Impl.init());
-        return Impls{
-            .impls = impls,
-        };
+
+        return .{ .impls = impls };
     }
 
-    pub fn getFromLit(self: Self, literal: Literal) *Variable {
+    pub fn getFromLit(self: Impls, literal: Literal) *Variable {
         return self.getVar(literal.variable);
     }
 
-    pub fn getVar(self: Self, variable: usize) *Variable {
+    pub fn getVar(self: Impls, variable: usize) *Variable {
         return &self.impls[variable].variable;
     }
 
-    pub fn set(self: *Self, variable: usize, value: Variable, reason: Clause) void {
-        self.impls[variable] = Impl{
-            .reason = reason,
-            .variable = value,
-        };
+    pub fn getReason(self: Impls, variable: usize) *Reason {
+        return &self.impls[variable].reason;
+    }
+
+    pub fn set(self: *Impls, variable: usize, value: Variable, reason: Reason) void {
+        self.impls[variable] = .{ .reason = reason, .variable = value };
     }
 };
 
+pub const Reason = union(enum) {
+    unary,
+    binary: Literal,
+    other: Clause,
+};
+
+pub const Conflict = union(enum) {
+    binary: [2]Literal,
+    other: Clause,
+};
+
 pub const Impl = struct {
-    reason: Clause,
+    reason: Reason,
     variable: Variable,
 
-    const Self = @This();
-
-    pub fn init() Self {
-        return Impl{
-            .reason = Clause.getNull(),
-            .variable = .UNASSIGNED,
-        };
+    pub fn init() Impl {
+        return .{ .reason = .unary, .variable = .unassigned };
     }
 };

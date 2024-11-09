@@ -12,11 +12,9 @@ pub const BinClauses = struct {
     pub fn init(allocator: Allocator, variables: usize) !Self {
         const impls = try allocator.alloc(std.ArrayList(Literal), 2 * variables);
 
-        for (impls) |*impl| {
-            impl.* = std.ArrayList(Literal).init(allocator);
-        }
+        for (impls) |*impl| impl.* = std.ArrayList(Literal).init(allocator);
 
-        return BinClauses{
+        return .{
             .allocator = allocator,
             .impls = impls,
             .len = 0,
@@ -34,10 +32,7 @@ pub const BinClauses = struct {
 
     /// the destructor of the binary clauses
     pub fn deinit(self: *Self) void {
-        for (self.impls) |*impl| {
-            impl.deinit();
-        }
-
+        for (self.impls) |*impl| impl.deinit();
         self.allocator.free(self.impls);
     }
 
@@ -48,13 +43,10 @@ pub const BinClauses = struct {
 
     pub fn format(
         self: Self,
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
+        comptime _: []const u8,
+        _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        _ = options;
-        _ = fmt;
-
         for (self.impls, 0..) |impls, i| {
             for (impls.items) |implicates| {
                 try writer.print(" & ({s} -> {s})", .{ Literal.fromIndex(i), implicates });

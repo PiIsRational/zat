@@ -31,8 +31,8 @@ pub const Clause = struct {
     }
 
     /// checks if this clause points to garbage in memory
-    pub fn isGarbage(self: Self, db: *const ClauseDb) bool {
-        return db.*.memory.items[self.index].header.is_garbage;
+    pub fn isGarbage(self: Self, db: ClauseDb) bool {
+        return db.memory.items[self.index].header.is_garbage;
     }
 
     /// checks if this clause points to nothing
@@ -41,31 +41,31 @@ pub const Clause = struct {
     }
 
     /// getter for the amount of literals in this clause
-    pub fn getLength(self: Self, db: *const ClauseDb) usize {
+    pub fn getLength(self: Self, db: ClauseDb) usize {
         return db.memory.items[self.index].header.len;
     }
 
     /// getter for the literals contained in this clause as a const slice
-    pub fn getLiterals(self: Self, db: *const ClauseDb) []const Literal {
+    pub fn getLiterals(self: Self, db: ClauseDb) []const Literal {
         return self.getLitsMut(db);
     }
 
     /// getter for the literals as a normal slice
-    pub fn getLitsMut(self: Self, db: *const ClauseDb) []Literal {
+    pub fn getLitsMut(self: Self, db: ClauseDb) []Literal {
         return @ptrCast(db.memory
             .items[self.index + 1 .. self.index + self.getLength(db) + 1]);
     }
 
     /// checks that this clause is satisfied
-    pub fn isSatisfied(self: Self, instance: *const SatInstance) bool {
-        for (self.getLiterals(&instance.*.clauses)) |lit| {
+    pub fn isSatisfied(self: Self, instance: SatInstance) bool {
+        for (self.getLiterals(instance.clauses)) |lit| {
             if (instance.isTrue(lit)) return true;
         }
 
         return false;
     }
 
-    pub fn fullyAssigned(self: Self, instance: *const SatInstance) bool {
+    pub fn fullyAssigned(self: Self, instance: SatInstance) bool {
         for (self.getLiterals(&instance.clauses)) |lit| {
             if (instance.unassigned(lit)) return false;
         }
@@ -73,7 +73,7 @@ pub const Clause = struct {
         return true;
     }
 
-    pub fn isUnit(self: Self, instance: *const SatInstance) bool {
+    pub fn isUnit(self: Self, instance: SatInstance) bool {
         var found_unassigned = false;
 
         for (self.getLiterals(&instance.clauses)) |lit| {
@@ -89,7 +89,7 @@ pub const Clause = struct {
     }
 
     /// returns the reference to the memory behind this clause
-    pub fn getRef(self: Self, db: *const ClauseDb) ClauseRef {
+    pub fn getRef(self: Self, db: ClauseDb) ClauseRef {
         return .{ .lits = self.getLiterals(db) };
     }
 };

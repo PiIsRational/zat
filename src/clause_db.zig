@@ -27,12 +27,9 @@ pub const ClauseDb = struct {
         // we want to alloc the first block of memory such that a clause
         // with an index of zero can be used equivalently to a null pointer
         var memory = std.ArrayList(MemCell).init(allocator);
-        try memory.append(MemCell{ .garbage = GarbageHeader{
-            .is_garbage = true,
-            .len = 0,
-        } });
+        try memory.append(.{ .garbage = .{ .is_garbage = true, .len = 0 } });
 
-        return ClauseDb{
+        return .{
             .clauses = std.ArrayList(Clause).init(allocator),
             .allocator = allocator,
             .memory = memory,
@@ -44,7 +41,7 @@ pub const ClauseDb = struct {
     /// adds a clause containing `literals` to the clause database
     pub fn addClause(self: *Self, literals: []Literal) !Clause {
         var clause = try self.alloc(literals.len);
-        @memcpy(clause.getLitsMut(self), literals);
+        @memcpy(clause.getLitsMut(self.*), literals);
 
         return clause;
     }
@@ -121,17 +118,12 @@ pub const ClauseDb = struct {
             self.clausesFromMem();
         }
 
-        self.memory.appendAssumeCapacity(MemCell{
-            .header = ClauseHeader{
-                .is_garbage = false,
-                .len = size,
-            },
+        self.memory.appendAssumeCapacity(.{
+            .header = .{ .is_garbage = false, .len = size },
         });
 
         const header = self.memory.items.len - 1;
-        self.memory.appendNTimesAssumeCapacity(MemCell{
-            .literal = Literal.default(),
-        }, size);
+        self.memory.appendNTimesAssumeCapacity(.{ .literal = Literal.default() }, size);
 
         return Clause.fromHeader(header);
     }
@@ -147,9 +139,7 @@ pub const ClauseDb = struct {
             if (current.header.is_garbage) {
                 i += current.garbage.len;
             } else {
-                self.clauses.appendAssumeCapacity(
-                    Clause.fromHeader(i),
-                );
+                self.clauses.appendAssumeCapacity(Clause.fromHeader(i));
                 i += current.header.len;
             }
         }

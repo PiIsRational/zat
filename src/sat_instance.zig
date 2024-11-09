@@ -10,7 +10,12 @@ const BinClauses = @import("binary_clauses.zig").BinClauses;
 const WatchList = @import("watch.zig").WatchList;
 const ClauseRef = @import("clause.zig").ClauseRef;
 const Impls = @import("impl.zig").Impls;
+const Reason = @import("impl.zig").Reason;
+const Conflict = @import("impl.zig").Conflict;
 const UnitSetting = @import("watch.zig").UnitSetting;
+const ImplGraphWriter = @import("impl_graph_writer.zig");
+
+var flag = false;
 
 pub const SatInstance = struct {
     allocator: Allocator,
@@ -27,14 +32,16 @@ pub const SatInstance = struct {
         allocator: Allocator,
         variables: usize,
     ) !SatInstance {
+        var setting_order = std.ArrayList(usize).init(allocator);
+        try setting_order.ensureTotalCapacity(variables);
         return .{
             .allocator = allocator,
+            .setting_order = setting_order,
             .clauses = try ClauseDb.init(allocator, variables),
-            .binary_clauses = try BinClauses.init(allocator, variables),
             .watch = try WatchList.init(variables, allocator),
             .variables = try Impls.init(allocator, variables),
-            .setting_order = std.ArrayList(usize).init(allocator),
             .units_to_set = std.ArrayList(UnitSetting).init(allocator),
+            .binary_clauses = try BinClauses.init(allocator, variables),
         };
     }
 
@@ -42,36 +49,36 @@ pub const SatInstance = struct {
         while (true) {
             // first resolve unit clauses
             while (self.units_to_set.items.len > 0) {
-                if (try self.setUnits() and !try self.resolve()) return .UNSAT;
+                const conflict = try self.setUnits();
+                if (conflict) |c| if (!try self.resolve(c)) return .unsat;
             }
 
             // if the variable were all set without a conflict
             // we have found a sitisfying result
             if (self.setting_order.items.len == self.variables.impls.len) {
                 assert(self.isSat());
-                return .{ .SAT = self.variables };
+                return .{ .sat = self.variables };
             }
 
             // choose a variable to set
-            if (try self.choose() and !try self.resolve()) return .UNSAT;
+            const conflict = try self.choose();
+            if (conflict) |c| if (!try self.resolve(c)) return .unsat;
         }
     }
 
     /// set `variable` to `state`.
-    ///
-    /// iff was able to set returns true
-    pub fn set(self: *Self, variable: usize, state: Variable, reason: Clause) !bool {
+    pub fn set(self: *Self, variable: usize, state: Variable, reason: Reason) !?Conflict {
         // cannot set a variable to unassigned
-        assert(state != .UNASSIGNED);
+        assert(state != .unassigned);
 
         const var_ptr = self.variables.getVar(variable);
 
-        if (var_ptr.isEqual(state)) return true;
-        if (var_ptr.* != .UNASSIGNED) return false;
+        if (var_ptr.isEqual(state)) return null;
+        assert(var_ptr.* == .unassigned);
 
         self.variables.set(variable, state, reason);
         try self.setting_order.append(variable);
-        return !try self.watch.set(Literal.init(
+        return try self.watch.set(Literal.init(
             state.isFalse(),
             @intCast(variable),
         ), self);
@@ -93,7 +100,7 @@ pub const SatInstance = struct {
     pub fn addClause(self: *Self, literals: []Literal) !void {
         // append a unit clause
         if (literals.len == 1) {
-            try self.addUnit(.{ .to_set = literals[0], .reason = Clause.getNull() });
+            try self.addUnit(.{ .to_set = literals[0], .reason = .unary });
             return;
         }
 
@@ -138,7 +145,7 @@ pub const SatInstance = struct {
     }
 
     /// checks if the instance is currently satisfied
-    fn isSat(self: *Self) bool {
+    fn isSat(self: Self) bool {
         for (self.clauses.clauses.items) |c| {
             if (!c.isSatisfied(self)) return false;
         }
@@ -147,30 +154,26 @@ pub const SatInstance = struct {
     }
 
     /// set all the unit clauses
-    ///
-    /// returns true iff there was a conflict
-    fn setUnits(self: *Self) !bool {
+    fn setUnits(self: *Self) !?Conflict {
         while (self.units_to_set.popOrNull()) |to_set| {
-            if (!try self.set(
+            if (try self.set(
                 to_set.to_set.variable,
-                if (to_set.to_set.is_negated)
-                    .FORCE_FALSE
-                else
-                    .FORCE_TRUE,
+                if (to_set.to_set.is_negated) .force_false else .force_true,
                 to_set.reason,
-            )) {
-                // in this case there was a conflict
-                return true;
-            }
+            )) |conflict| return conflict;
 
             // now that the variable was set check implications
             for (self.binary_clauses.getImplied(to_set.to_set)) |to_add| {
                 // if the literal is false we have a conflict
-                if (self.isFalse(to_add)) return true;
+                if (self.isFalse(to_add)) return .{
+                    .binary = .{ to_set.to_set.negated(), to_add },
+                };
 
-                if (!self.isTrue(to_add)) {
-                    try self.addUnit(.{ .to_set = to_add, .reason = to_set.reason });
-                }
+                if (self.isTrue(to_add)) continue;
+                try self.addUnit(.{
+                    .to_set = to_add,
+                    .reason = .{ .binary = to_set.to_set },
+                });
             }
         }
 
@@ -178,35 +181,38 @@ pub const SatInstance = struct {
         // => the unit list should be empty
         assert(self.units_to_set.items.len == 0);
 
-        return false;
+        return null;
     }
 
     /// choose the next literal to pick and set it
-    ///
-    /// iff encountered an error returns true
-    fn choose(self: *Self) !bool {
+    fn choose(self: *Self) !?Conflict {
         assert(self.units_to_set.items.len == 0);
 
         // TODO: implement proper heuristics to make this work
         for (self.variables.impls, 0..) |v, i| {
-            if (v.variable != .UNASSIGNED) continue;
+            if (v.variable != .unassigned) continue;
 
             // as there is no reason the reason and
             // it is a test assignement choose any literal
-            const res = !try self.set(i, .TEST_TRUE, Clause.getNull());
-            return res;
+            return try self.set(i, .test_true, .unary);
         }
 
-        return true;
+        return null;
     }
 
     /// the method used to resolve a conflict in the assignement
     /// (basic backtracking).
     ///
     /// iff returns true the backtracking was successful
-    fn resolve(self: *Self) !bool {
+    fn resolve(self: *Self, conflict: Conflict) !bool {
         // the current unit clauses did lead to a problem
         self.units_to_set.clearRetainingCapacity();
+
+        if (flag) {
+            const writer = ImplGraphWriter.init(self.*, conflict);
+            std.debug.print("{s}\n", .{writer});
+            unreachable;
+        }
 
         var i: usize = 0;
         while (self.setting_order.popOrNull()) |value| {
@@ -217,29 +223,26 @@ pub const SatInstance = struct {
                 const new_state = variable.getInverse();
                 assert(new_state.isForce());
 
-                variable.* = .UNASSIGNED;
-                // TODO: the given reason here is wrong
-                // (it is set because of a conflict)
-                // it should be fixed when implementing the CDCL
-                if (!try self.set(value, new_state, Clause.getNull())) continue;
+                variable.* = .unassigned;
+                if (try self.set(value, new_state, .unary) != null) continue;
 
                 return true;
             }
 
-            variable.* = .UNASSIGNED;
+            variable.* = .unassigned;
         }
 
         // the instance is unsat as the variable could not be found
         return false;
     }
 
-    fn debugSettingOrder(self: Self) void {
+    pub fn debugSettingOrder(self: Self) void {
         std.debug.print("{{ ", .{});
         if (self.setting_order.items.len >= 1) {
             const first = self.setting_order.items[0];
-            std.debug.print("{s}{d}", .{ self.variables.getVar(first), first });
+            std.debug.print("{s}{d}", .{ self.variables.getVar(first), first + 1 });
             for (self.setting_order.items[1..]) |next| {
-                std.debug.print(", {s}{d}", .{ self.variables.getVar(next), next });
+                std.debug.print(", {s}{d}", .{ self.variables.getVar(next), next + 1 });
             }
         }
         std.debug.print(" }}\n", .{});
@@ -262,7 +265,7 @@ pub const SatInstance = struct {
     pub fn unassigned(self: Self, literal: Literal) bool {
         assert(literal.variable < self.variables.impls.len);
 
-        return self.variables.getFromLit(literal).* == .UNASSIGNED;
+        return self.variables.getFromLit(literal).* == .unassigned;
     }
 
     pub fn format(

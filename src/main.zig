@@ -23,16 +23,16 @@ pub fn main() !void {
     }
 
     try stdout.print("c FILE: {s}\n", .{args[1]});
-    var instance = try InstanceBuilder.load_from_file(gpa.allocator(), args[1]);
+    var instance = try InstanceBuilder.loadFromFile(gpa.allocator(), args[1]);
     var result = try instance.solve();
 
     try stdout.print("s {s}\n", .{result.toString()});
 
     switch (result) {
-        .SAT => {
+        .sat => {
             try stdout.print("v {s}\n", .{result});
             std.posix.exit(SAT_EXIT);
         },
-        .UNSAT => std.posix.exit(UNSAT_EXIT),
+        .unsat => std.posix.exit(UNSAT_EXIT),
     }
 }

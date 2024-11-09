@@ -1,11 +1,11 @@
 const std = @import("std");
 
 pub const Variable = enum(i8) {
-    UNASSIGNED = -1,
-    TEST_FALSE,
-    TEST_TRUE,
-    FORCE_FALSE,
-    FORCE_TRUE,
+    unassigned = -1,
+    test_false,
+    test_true,
+    force_false,
+    force_true,
 
     const Self = @This();
 
@@ -26,26 +26,26 @@ pub const Variable = enum(i8) {
 
     /// check if two variables have an equal value
     pub fn isEqual(self: Self, other: Self) bool {
-        return (self == .UNASSIGNED) == (other == .UNASSIGNED) and
+        return (self == .unassigned) == (other == .unassigned) and
             self.isTrue() == other.isTrue();
     }
 
     pub fn getInverse(self: Self) Variable {
         return switch (self) {
-            .TEST_FALSE => .FORCE_TRUE,
-            .TEST_TRUE => .FORCE_FALSE,
-            .FORCE_FALSE => .TEST_TRUE,
-            .FORCE_TRUE => .TEST_FALSE,
-            else => .UNASSIGNED,
+            .test_false => .force_true,
+            .test_true => .force_false,
+            .force_false => .test_true,
+            .force_true => .test_false,
+            else => .unassigned,
         };
     }
 
     pub fn toString(self: Self) []const u8 {
         return switch (self) {
-            .TEST_TRUE => "TEST_TRUE",
-            .TEST_FALSE => "TEST_FALSE",
-            .FORCE_TRUE => "FORCE_TRUE",
-            .FORCE_FALSE => "FORCE_FALSE",
+            .test_false => "TEST_TRUE",
+            .test_false => "TEST_FALSE",
+            .force_true => "FORCE_TRUE",
+            .force_false => "FORCE_FALSE",
             else => "UNASSIGNED",
         };
     }
@@ -57,6 +57,6 @@ pub const Variable = enum(i8) {
         writer: anytype,
     ) !void {
         if (self.isFalse()) try writer.print("-", .{});
-        if (self == .UNASSIGNED) try writer.print("~", .{});
+        if (self == .unassigned) try writer.print("~", .{});
     }
 };
