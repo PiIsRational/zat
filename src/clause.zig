@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const GarbageFlag = @import("mem_cell.zig").GarbageFlag;
 const LiteralFlag = @import("mem_cell.zig").LiteralFlag;
 const Literal = @import("literal.zig").Literal;
@@ -21,16 +22,12 @@ pub const Clause = struct {
 
     /// initializes a clause from the index to its header
     pub fn fromHeader(header_idx: usize) Clause {
-        return Clause{
-            .index = header_idx,
-        };
+        return .{ .index = header_idx };
     }
 
     /// returns a null clause (it points to nothing)
     pub fn getNull() Clause {
-        return Clause{
-            .index = 0,
-        };
+        return .{ .index = 0 };
     }
 
     /// checks if this clause points to garbage in memory
@@ -45,7 +42,7 @@ pub const Clause = struct {
 
     /// getter for the amount of literals in this clause
     pub fn getLength(self: Self, db: *const ClauseDb) usize {
-        return db.*.memory.items[self.index].header.len;
+        return db.memory.items[self.index].header.len;
     }
 
     /// getter for the literals contained in this clause as a const slice
@@ -55,15 +52,14 @@ pub const Clause = struct {
 
     /// getter for the literals as a normal slice
     pub fn getLitsMut(self: Self, db: *const ClauseDb) []Literal {
-        return @ptrCast(db.memory.items[self.index + 1 .. self.index + self.getLength(db) + 1]);
+        return @ptrCast(db.memory
+            .items[self.index + 1 .. self.index + self.getLength(db) + 1]);
     }
 
     /// checks that this clause is satisfied
     pub fn isSatisfied(self: Self, instance: *const SatInstance) bool {
         for (self.getLiterals(&instance.*.clauses)) |lit| {
-            if (instance.isTrue(lit)) {
-                return true;
-            }
+            if (instance.isTrue(lit)) return true;
         }
 
         return false;
@@ -71,9 +67,7 @@ pub const Clause = struct {
 
     pub fn fullyAssigned(self: Self, instance: *const SatInstance) bool {
         for (self.getLiterals(&instance.clauses)) |lit| {
-            if (instance.unassigned(lit)) {
-                return false;
-            }
+            if (instance.unassigned(lit)) return false;
         }
 
         return true;
@@ -84,16 +78,11 @@ pub const Clause = struct {
 
         for (self.getLiterals(&instance.clauses)) |lit| {
             if (instance.unassigned(lit)) {
-                if (found_unassigned) {
-                    return false;
-                }
-
+                if (found_unassigned) return false;
                 found_unassigned = true;
             }
 
-            if (instance.isTrue(lit)) {
-                return false;
-            }
+            if (instance.isTrue(lit)) return false;
         }
 
         return found_unassigned;
@@ -101,9 +90,7 @@ pub const Clause = struct {
 
     /// returns the reference to the memory behind this clause
     pub fn getRef(self: Self, db: *const ClauseDb) ClauseRef {
-        return ClauseRef{
-            .lits = self.getLiterals(db),
-        };
+        return .{ .lits = self.getLiterals(db) };
     }
 };
 
@@ -131,20 +118,14 @@ pub const ClauseRef = struct {
 
     pub fn format(
         self: Self,
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
+        comptime _: []const u8,
+        _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        _ = options;
-        _ = fmt;
-
-        for (self.getLiterals(), 0..) |literal, i| {
-            try writer.print("{s}", .{literal});
-
-            if (i != self.getLength() - 1) {
-                try writer.print(" | ", .{});
-            }
-        }
+        const lits = self.getLiterals();
+        if (lits.len == 0) return;
+        try writer.print("{s}", .{lits[0]});
+        for (lits) |lit| try writer.print(" | {s}", .{lit});
     }
 };
 
@@ -152,6 +133,10 @@ pub const ClauseRef = struct {
 pub const ClauseHeader = packed struct {
     is_garbage: bool,
     len: u31,
+
+    comptime {
+        assert(@sizeOf(ClauseHeader) == 4);
+    }
 
     const Self = @This();
 };

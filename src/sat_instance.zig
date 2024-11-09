@@ -119,7 +119,7 @@ pub const SatInstance = struct {
         return false;
     }
 
-    ///this is a debugging method!
+    /// this is a debugging method!
     ///
     /// it checks that `literal` is the last chosen assignement
     pub fn isLastChoice(self: Self, literal: Literal) bool {

@@ -180,10 +180,12 @@ const Watch = struct {
         assert(instance.watch.isWatched(self.clause, literal));
 
         // check that the other watch is allowed to be false
-        assert(!instance.isFalse(other_watch) or
-            self.clause.fullyAssigned(instance) or
-            instance.isLastChoice(literal) or
-            instance.isUnitAssignement(literal));
+        if (true) {
+            assert(!instance.isFalse(other_watch) or
+                self.clause.fullyAssigned(instance) or
+                instance.isLastChoice(literal) or
+                instance.isUnitAssignement(literal));
+        }
         assert(literals[1].eql(literal));
 
         // check that the other watch is true, because if it is, we are done as the clause

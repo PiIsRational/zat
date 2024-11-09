@@ -29,12 +29,10 @@ pub fn main() !void {
     try stdout.print("s {s}\n", .{result.toString()});
 
     switch (result) {
-        .SAT => try stdout.print("v {s}\n", .{result}),
-        .UNSAT => {},
-    }
-
-    switch (result) {
-        .SAT => std.posix.exit(SAT_EXIT),
+        .SAT => {
+            try stdout.print("v {s}\n", .{result});
+            std.posix.exit(SAT_EXIT);
+        },
         .UNSAT => std.posix.exit(UNSAT_EXIT),
     }
 }
