@@ -99,9 +99,7 @@ pub const ClauseDb = struct {
             }
         }
 
-        for (self.free_list) |*value| {
-            value = null;
-        }
+        for (self.free_list) |*value| value = null;
     }
 
     fn allocStandard(self: Self, size: usize) Clause {

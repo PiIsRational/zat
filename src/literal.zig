@@ -47,6 +47,10 @@ pub const Literal = packed struct {
         return self.variable == other.variable and self.is_negated == other.is_negated;
     }
 
+    pub fn toVar(self: Literal) usize {
+        return self.variable;
+    }
+
     /// returns the negated version of this literal
     pub fn negated(self: Self) Self {
         return .{

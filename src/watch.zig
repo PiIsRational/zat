@@ -14,7 +14,6 @@ pub const WatchList = struct {
     watches: []std.ArrayList(Watch),
     initialized: bool,
     allocator: Allocator,
-    db: *ClauseDb,
 
     const Self = @This();
 
@@ -33,23 +32,20 @@ pub const WatchList = struct {
             .initialized = false,
             .watches = watches,
             .allocator = allocator,
-            .db = undefined,
         };
     }
 
-    pub fn setUp(self: *Self, db: *ClauseDb) !void {
-        self.db = db;
-
+    pub fn setUp(self: *Self, db: ClauseDb) !void {
         if (self.initialized) return;
         self.initialized = true;
 
         // iterate through each clause and check if it is garbage or no
-        for (self.db.clauses.items) |clause| {
-            assert(!clause.isGarbage(self.db.*));
+        for (db.clauses.items) |clause| {
+            assert(!clause.isGarbage(db));
 
-            const lits = clause.getLiterals(self.db.*);
+            const lits = clause.getLiterals(db);
             assert(!lits[0].eql(lits[1]));
-            try self.append(clause, .{ lits[0], lits[1] });
+            try self.append(clause, .{ lits[0], lits[1] }, db);
         }
     }
 
@@ -87,13 +83,13 @@ pub const WatchList = struct {
     ///
     /// The two given literals should be different variables and included in the clause.
     /// Additionally they should not be negated.
-    pub fn append(self: *Self, clause: Clause, literals: [2]Literal) !void {
+    pub fn append(self: *Self, clause: Clause, literals: [2]Literal, db: ClauseDb) !void {
         if (!self.initialized) return;
 
         for (literals, 0..) |literal, i| {
             assert(!literal.is_garbage);
-            assert(clause.getLiterals(self.db.*)[i].eql(literal) or
-                clause.getLiterals(self.db.*)[i ^ 1].eql(literal));
+            assert(clause.getLiterals(db)[i].eql(literal) or
+                clause.getLiterals(db)[i ^ 1].eql(literal));
 
             try self.addWatch(literal, .{ .blocking = literals[i ^ 1], .clause = clause });
         }

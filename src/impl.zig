@@ -19,15 +19,37 @@ pub const Impls = struct {
     }
 
     pub fn getVar(self: Impls, variable: usize) *Variable {
-        return &self.impls[variable].variable;
+        return &self.get(variable).variable;
     }
 
     pub fn getReason(self: Impls, variable: usize) *Reason {
-        return &self.impls[variable].reason;
+        return &self.get(variable).reason;
     }
 
-    pub fn set(self: *Impls, variable: usize, value: Variable, reason: Reason) void {
-        self.impls[variable] = .{ .reason = reason, .variable = value };
+    pub fn getChoiceCount(self: Impls, variable: usize) *usize {
+        return &self.get(variable).choice_count;
+    }
+
+    pub fn get(self: Impls, variable: usize) *Impl {
+        return &self.impls[variable];
+    }
+
+    pub fn getLit(self: Impls, variable: usize) Literal {
+        return Literal.init(self.getVar(variable).isFalse(), @intCast(variable));
+    }
+
+    pub fn set(
+        self: *Impls,
+        variable: usize,
+        value: Variable,
+        reason: Reason,
+        choice_count: usize,
+    ) void {
+        self.impls[variable] = .{
+            .reason = reason,
+            .variable = value,
+            .choice_count = choice_count,
+        };
     }
 };
 
@@ -44,9 +66,10 @@ pub const Conflict = union(enum) {
 
 pub const Impl = struct {
     reason: Reason,
+    choice_count: usize,
     variable: Variable,
 
     pub fn init() Impl {
-        return .{ .reason = .unary, .variable = .unassigned };
+        return .{ .reason = .unary, .variable = .unassigned, .choice_count = 0 };
     }
 };

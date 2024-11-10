@@ -49,9 +49,7 @@ pub const InstanceBuilder = struct {
                     try self.parseLine(currline, &instance);
                     currline.clearRetainingCapacity();
                 },
-                else => {
-                    try currline.append(buffer[index]);
-                },
+                else => try currline.append(buffer[index]),
             }
 
             index += 1;
@@ -71,7 +69,7 @@ pub const InstanceBuilder = struct {
             return ParseError.IllegalClauseCount;
         }
 
-        try instance.watch.setUp(&instance.clauses);
+        try instance.watch.setUp(instance.clauses);
 
         return instance;
     }
@@ -233,7 +231,7 @@ pub const InstanceBuilder = struct {
         while (i < end) : (i += 1) {
             const current = literals[i].toIndex();
             if (self.lit_counts[current] == 1) {
-                literals[i] = literals[end];
+                literals[i] = literals[end - 1];
                 end -= 1;
             } else {
                 self.lit_counts[current] = 1;
