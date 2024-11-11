@@ -12,7 +12,7 @@ const ClauseDb = @import("clause_db.zig").ClauseDb;
 ///
 /// it contains the index to the header of the corresponding clause in the clause memory
 pub const Clause = struct {
-    index: usize,
+    index: u32,
     const Self = @This();
 
     /// sets the literals of
@@ -22,7 +22,7 @@ pub const Clause = struct {
 
     /// initializes a clause from the index to its header
     pub fn fromHeader(header_idx: usize) Clause {
-        return .{ .index = header_idx };
+        return .{ .index = @intCast(header_idx) };
     }
 
     /// returns a null clause (it points to nothing)

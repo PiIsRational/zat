@@ -35,7 +35,7 @@ pub const Impls = struct {
     }
 
     pub fn getLit(self: Impls, variable: usize) Literal {
-        return Literal.init(self.getVar(variable).isFalse(), @intCast(variable));
+        return Literal.init(self.getVar(variable).* == .neg, @intCast(variable));
     }
 
     pub fn set(

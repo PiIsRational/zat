@@ -4,6 +4,7 @@ const InstanceBuilder = @import("instance_builder.zig").InstanceBuilder;
 const fs = std.fs;
 const OpenError = fs.File.OpenError;
 const Allocator = std.mem.Allocator;
+const Watch = @import("watch.zig").Watch;
 
 const ERROR_EXIT = 1;
 const SAT_EXIT = 10;
@@ -26,6 +27,8 @@ pub fn main() !void {
     var instance = try InstanceBuilder.loadFromFile(gpa.allocator(), args[1]);
     var result = try instance.solve();
 
+    try stdout.print("c {d} conflicts\n", .{instance.conflicts});
+    try stdout.print("c {s}", .{Watch.stats});
     try stdout.print("s {s}\n", .{result.toString()});
 
     switch (result) {

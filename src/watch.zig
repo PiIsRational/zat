@@ -9,6 +9,7 @@ const SatResult = @import("result.zig").SatResult;
 const ClauseRef = @import("clause.zig").ClauseRef;
 const Reason = @import("impl.zig").Reason;
 const Conflict = @import("impl.zig").Conflict;
+const opts = @import("build_opt");
 
 pub const WatchList = struct {
     watches: []std.ArrayList(Watch),
@@ -39,7 +40,7 @@ pub const WatchList = struct {
         if (self.initialized) return;
         self.initialized = true;
 
-        // iterate through each clause and check if it is garbage or no
+        // iterate through each clause and if (var_ptr.isEqual(state)) return null;check if it is garbage or no
         for (db.clauses.items) |clause| {
             assert(!clause.isGarbage(db));
 
@@ -64,7 +65,8 @@ pub const WatchList = struct {
 
             switch (try watch.set(to_update, instance)) {
                 .ok => |value| if (value) |new_literal| {
-                    // after setting the watch the new literal should be the first of the clause
+                    // after setting the watch the new literal should be the
+                    // first of the clause
                     assert(watch.clause.getLiterals(instance.clauses)[1].eql(new_literal));
 
                     // the returns value is not null, so we need to move the watch
@@ -95,7 +97,10 @@ pub const WatchList = struct {
         }
     }
 
+    /// this function is made for asserts
     pub fn isWatched(self: Self, clause: Clause, literal: Literal) bool {
+        if (opts.no_assert) return true;
+
         for (self.watches[literal.toIndex()].items) |w| {
             if (w.clause.index == clause.index) return true;
         }
@@ -135,9 +140,82 @@ pub const WatchList = struct {
     }
 };
 
-const Watch = struct {
+pub const Watch = struct {
     blocking: Literal,
     clause: Clause,
+
+    pub var stats: struct {
+        sets: usize = 0,
+        blocking_true: usize = 0,
+        watch_swaps: usize = 0,
+        no_watch_swaps: usize = 0,
+        other_true: usize = 0,
+        new_watch_count: usize = 0,
+        new_watch_distance: usize = 0,
+        conflict_count: usize = 0,
+        unit_count: usize = 0,
+
+        pub fn reset(self: *@This()) void {
+            self.* = .{};
+        }
+
+        pub fn blockingTrue(self: *@This()) void {
+            self.sets += 1;
+            self.blocking_true += 1;
+        }
+
+        pub fn watchSwaps(self: *@This()) void {
+            self.watch_swaps += 1;
+        }
+
+        pub fn noWatchSwaps(self: *@This()) void {
+            self.no_watch_swaps += 1;
+        }
+
+        pub fn otherTrue(self: *@This()) void {
+            self.sets += 1;
+            self.other_true += 1;
+        }
+
+        pub fn newWatch(self: *@This(), dist: usize) void {
+            self.sets += 1;
+            self.new_watch_count += 1;
+            self.new_watch_distance += dist;
+        }
+
+        pub fn conflict(self: *@This()) void {
+            self.sets += 1;
+            self.conflict_count += 1;
+        }
+
+        pub fn unit(self: *@This()) void {
+            self.unit_count += 1;
+            self.sets += 1;
+        }
+
+        pub fn format(
+            self: @This(),
+            comptime _: []const u8,
+            _: std.fmt.FormatOptions,
+            writer: anytype,
+        ) !void {
+            try writer.print(
+                "sets: {d}, blocking true: {d}, watch swaps: {d}, no swaps: {d}\n" ++
+                    " other true: {d}, new watch count: {d}, new watch dist: {d}, conflict: {d}, unit: {d}\n",
+                .{
+                    self.sets,
+                    self.blocking_true,
+                    self.watch_swaps,
+                    self.no_watch_swaps,
+                    self.other_true,
+                    self.new_watch_count,
+                    self.new_watch_distance,
+                    self.conflict_count,
+                    self.unit_count,
+                },
+            );
+        }
+    } = .{};
 
     const Self = @This();
 
@@ -162,7 +240,10 @@ const Watch = struct {
 
         // first check that the blocking literal is assigned true
         // because if it is the case the clause is already satisfied
-        if (instance.isTrue(self.blocking)) return .{ .ok = null };
+        if (instance.isTrue(self.blocking)) {
+            Watch.stats.blockingTrue();
+            return .{ .ok = null };
+        }
 
         var literals = self.clause.getLitsMut(instance.clauses);
 
@@ -170,8 +251,11 @@ const Watch = struct {
         // as it will not be watched anymore
         var other_watch = literals[0];
         if (literal.eql(other_watch)) {
+            Watch.stats.watchSwaps();
             std.mem.swap(Literal, &literals[0], &literals[1]);
             other_watch = literals[0];
+        } else {
+            Watch.stats.noWatchSwaps();
         }
 
         assert(instance.watch.isWatched(self.clause, other_watch));
@@ -182,6 +266,7 @@ const Watch = struct {
         // is satisfied. we check that the blocking literal is not the other watch as the
         // blocking iteral is already known to be untrue.
         if (!self.blocking.eql(other_watch) and instance.isTrue(other_watch)) {
+            Watch.stats.otherTrue();
             return .{ .ok = null };
         }
 
@@ -191,25 +276,30 @@ const Watch = struct {
         self.blocking = other_watch;
 
         // go through the other literals to find a new watch
-        for (literals[2..]) |*lit| {
+        for (literals[2..], 0..) |*lit, i| {
+
             // if it is not a false literal we can watch it
-            if (!instance.isFalse(lit.*)) {
-                assert(!lit.eql(literal));
-                const new_watch = lit.*;
+            if (instance.isFalse(lit.*)) continue;
+            Watch.stats.newWatch(i);
+            assert(!lit.eql(literal));
+            const new_watch = lit.*;
 
-                // reorder the literals and return it because we do need to
-                // move this watch to the new watchlist
-                std.mem.swap(Literal, lit, &literals[1]);
+            // reorder the literals and return it because we do need to
+            // move this watch to the new watchlist
+            std.mem.swap(Literal, lit, &literals[1]);
 
-                return .{ .ok = new_watch };
-            }
+            return .{ .ok = new_watch };
         }
 
         // check that the other watched literal is not negated
         // if it is false we have a conflict
-        if (instance.isFalse(other_watch)) return .{ .conflict = .{ .other = self.clause } };
+        if (instance.isFalse(other_watch)) {
+            Watch.stats.conflict();
+            return .{ .conflict = .{ .other = self.clause } };
+        }
 
         // if we did not find a second watch we got a unit clause
+        Watch.stats.unit();
         try instance.addUnit(.{
             .to_set = other_watch,
             .reason = .{ .other = self.clause },

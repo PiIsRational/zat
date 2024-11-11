@@ -29,6 +29,7 @@ pub const SatInstance = struct {
     setting_order: std.ArrayList(usize),
     units_to_set: std.ArrayList(UnitSetting),
     learner: ClauseLearner,
+    conflicts: usize = 0,
 
     const Self = @This();
 
@@ -51,6 +52,8 @@ pub const SatInstance = struct {
     }
 
     pub fn solve(self: *Self) !SatResult {
+        self.conflicts = 0;
+
         while (true) {
             while (self.units_to_set.items.len > 0) {
                 const conflict = try self.setUnits();
@@ -74,16 +77,12 @@ pub const SatInstance = struct {
         assert(state != .unassigned);
 
         const var_ptr = self.variables.getVar(variable);
-
-        if (var_ptr.isEqual(state)) return null;
+        if (var_ptr.* == state) return null;
         assert(var_ptr.* == .unassigned);
 
         self.variables.set(variable, state, reason, self.choice_count);
         try self.setting_order.append(variable);
-        return try self.watch.set(Literal.init(
-            state.isFalse(),
-            @intCast(variable),
-        ), self);
+        return try self.watch.set(Literal.init(state == .neg, @intCast(variable)), self);
     }
 
     pub fn addUnit(self: *Self, unit: UnitSetting) !void {
@@ -126,24 +125,6 @@ pub const SatInstance = struct {
         return false;
     }
 
-    /// this is a debugging method!
-    ///
-    /// it checks that `literal` is the last chosen assignement
-    pub fn isLastChoice(self: Self, literal: Literal) bool {
-        var i = self.setting_order.items.len;
-        while (i > 0) : (i -= 1) {
-            const current = self.setting_order.items[i - 1];
-            if (!self.variables.getVar(current).isForce() and
-                current == literal.variable and
-                self.variables.getVar(current).isFalse() == literal.is_negated)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     /// checks if the instance is currently satisfied
     fn isSat(self: Self) bool {
         for (self.clauses.clauses.items) |c| {
@@ -158,7 +139,7 @@ pub const SatInstance = struct {
         while (self.units_to_set.popOrNull()) |to_set| {
             if (try self.set(
                 to_set.to_set.variable,
-                if (to_set.to_set.is_negated) .force_false else .force_true,
+                if (to_set.to_set.is_negated) .neg else .pos,
                 to_set.reason,
             )) |conflict| return conflict;
 
@@ -195,7 +176,7 @@ pub const SatInstance = struct {
             // as there is no reason the reason and
             // it is a test assignement choose any literal
             self.choice_count += 1;
-            return try self.set(i, .test_true, .unary);
+            return try self.set(i, .pos, .unary);
         }
 
         // should not arrise
@@ -207,6 +188,8 @@ pub const SatInstance = struct {
     ///
     /// iff returns true the backtracking was successful
     fn resolve(self: *Self, conflict: Conflict) !bool {
+        self.conflicts += 1;
+
         // the current unit clauses did lead to a problem
         self.units_to_set.clearRetainingCapacity();
 
@@ -219,7 +202,6 @@ pub const SatInstance = struct {
             std.debug.print("appending: {{ ", .{});
             for (learned) |lit| std.debug.print("{s}, ", .{lit});
             std.debug.print("}}\n", .{});
-            self.debugSettingOrder();
         }
 
         const reason: Reason = switch (learned.len) {
@@ -269,21 +251,18 @@ pub const SatInstance = struct {
 
     pub fn isTrue(self: Self, literal: Literal) bool {
         assert(literal.variable < self.variables.impls.len);
-
-        return !self.unassigned(literal) and
-            literal.is_negated == self.variables.getFromLit(literal).isFalse();
+        const val = self.variables.getFromLit(literal).*;
+        return val != .unassigned and literal.is_negated == (val == .neg);
     }
 
     pub fn isFalse(self: Self, literal: Literal) bool {
         assert(literal.variable < self.variables.impls.len);
-
-        return !self.unassigned(literal) and
-            literal.is_negated == self.variables.getFromLit(literal).isTrue();
+        const val = self.variables.getFromLit(literal).*;
+        return val != .unassigned and literal.is_negated == (val == .pos);
     }
 
     pub fn unassigned(self: Self, literal: Literal) bool {
         assert(literal.variable < self.variables.impls.len);
-
         return self.variables.getFromLit(literal).* == .unassigned;
     }
 

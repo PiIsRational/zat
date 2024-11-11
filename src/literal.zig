@@ -7,6 +7,10 @@ pub const Literal = packed struct {
     is_negated: bool,
     variable: u30,
 
+    comptime {
+        assert(@sizeOf(Literal) == 4);
+    }
+
     const Self = @This();
 
     pub fn init(is_negated: bool, variable: u30) Literal {
@@ -43,8 +47,7 @@ pub const Literal = packed struct {
 
     pub fn eql(self: Self, other: Self) bool {
         assert(!self.is_garbage and !other.is_garbage);
-
-        return self.variable == other.variable and self.is_negated == other.is_negated;
+        return @as(u32, @bitCast(self)) == @as(u32, @bitCast(other));
     }
 
     pub fn toVar(self: Literal) usize {

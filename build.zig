@@ -13,7 +13,20 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path(main_path),
         .target = target,
         .optimize = optimize,
+        .omit_frame_pointer = false,
     });
+
+    const options = b.addOptions();
+
+    const no_assert = switch (optimize) {
+        .ReleaseFast, .ReleaseSmall => true,
+        .Debug, .ReleaseSafe => false,
+    } or b.option(bool, "no-assert", "nullifies big assert clauses (default: false)") orelse
+        false;
+
+    options.addOption(std.builtin.OptimizeMode, "optim", optimize);
+    options.addOption(bool, "no_assert", no_assert);
+    exe.root_module.addOptions("build_opt", options);
 
     b.installArtifact(exe);
     const run_cmd = b.addRunArtifact(exe);
