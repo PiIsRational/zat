@@ -179,7 +179,7 @@ pub const SatInstance = struct {
             self.choice_count += 1;
             const new_val = value.toggleAssign();
             assert(!new_val.unassigned());
-            return try self.set(variable, .pos, .unary);
+            return try self.set(variable, new_val, .unary);
         }
 
         assert(self.chooser.len() == 0);
