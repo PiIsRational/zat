@@ -77,11 +77,11 @@ pub const SatInstance = struct {
 
     /// set `variable` to `state`.
     pub fn set(self: *Self, variable: usize, state: Variable, reason: Reason) !?Conflict {
-        assert(state != .unassigned);
+        assert(!state.unassigned());
 
         const var_ptr = self.variables.getVar(variable);
         if (var_ptr.* == state) return null;
-        assert(var_ptr.* == .unassigned);
+        assert(!var_ptr.unassigned());
 
         self.variables.set(variable, state, reason, self.choice_count);
         try self.setting_order.append(variable);
@@ -168,21 +168,40 @@ pub const SatInstance = struct {
         return null;
     }
 
-    /// choose the next literal to pick and set it
+    /// choose using Evsids and Phase Saving
     fn choose(self: *Self) !?Conflict {
         assert(self.units_to_set.items.len == 0);
 
         while (self.chooser.nextVar()) |variable| {
-            if (self.variables.get(variable).variable != .unassigned) continue;
+            const value = self.variables.get(variable).variable;
+            if (!value.unassigned()) continue;
 
             self.choice_count += 1;
+            const new_val = value.toggleAssign();
+            assert(!new_val.unassigned());
             return try self.set(variable, .pos, .unary);
         }
 
-        // should not arrise
         assert(self.chooser.len() == 0);
         assert(self.setting_order.items.len == self.variables.impls.len);
         return null;
+    }
+
+    /// a trivial chooser that always takes the first unassinged variable
+    fn chooseTrivial(self: *Self) !?Conflict {
+        assert(self.units_to_set.items.len == 0);
+
+        for (self.variables.impls, 0..) |v, i| {
+            if (!v.variable.unassigned()) continue;
+
+            // as there is no reason the reason and
+            // it is a test assignement choose any literal
+            self.choice_count += 1;
+            return try self.set(i, .pos, .unary);
+        }
+
+        // should not arrise
+        unreachable;
     }
 
     /// the method used to resolve a conflict in the assignement
@@ -233,8 +252,8 @@ pub const SatInstance = struct {
             const variable = self.variables.get(value);
             if (variable.choice_count == to) break;
 
-            // reset the variable
-            variable.* = Impl.init();
+            // makes the variable unassigned but keeps it`s fase
+            variable.invalidate();
             try self.chooser.append(@intCast(value));
             _ = self.setting_order.pop();
         }
@@ -255,18 +274,18 @@ pub const SatInstance = struct {
     pub fn isTrue(self: Self, literal: Literal) bool {
         assert(literal.variable < self.variables.impls.len);
         const val = self.variables.getFromLit(literal).*;
-        return val != .unassigned and literal.is_negated == (val == .neg);
+        return !val.unassigned() and literal.is_negated == (val == .neg);
     }
 
     pub fn isFalse(self: Self, literal: Literal) bool {
         assert(literal.variable < self.variables.impls.len);
         const val = self.variables.getFromLit(literal).*;
-        return val != .unassigned and literal.is_negated == (val == .pos);
+        return !val.unassigned() and literal.is_negated == (val == .pos);
     }
 
     pub fn unassigned(self: Self, literal: Literal) bool {
         assert(literal.variable < self.variables.impls.len);
-        return self.variables.getFromLit(literal).* == .unassigned;
+        return self.variables.getFromLit(literal).unassigned();
     }
 
     pub fn format(

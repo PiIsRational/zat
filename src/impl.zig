@@ -69,7 +69,13 @@ pub const Impl = struct {
     choice_count: usize,
     variable: Variable,
 
+    pub fn invalidate(self: *Impl) void {
+        self.reason = .unary;
+        self.variable = self.variable.toggleAssign();
+        self.choice_count = 0;
+    }
+
     pub fn init() Impl {
-        return .{ .reason = .unary, .variable = .unassigned, .choice_count = 0 };
+        return .{ .reason = .unary, .variable = .un_pos, .choice_count = 0 };
     }
 };
