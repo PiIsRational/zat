@@ -38,7 +38,6 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&run_cmd.step);
 
     // unit tests
-
     const unit_tests = b.addTest(.{
         .root_source_file = b.path(main_path),
         .target = target,
@@ -47,8 +46,11 @@ pub fn build(b: *std.Build) void {
 
     const run_unit_tests = b.addRunArtifact(unit_tests);
 
+    const unit_test_step = b.step("unitest", "Run unit tests");
+    unit_test_step.dependOn(&run_unit_tests.step);
+
     // full tests
-    const test_step = b.step("test", "Run unit tests");
+    const test_step = b.step("test", "Run all tests");
     const sat_path = "test/sat/";
     const unsat_path = "test/unsat/";
 

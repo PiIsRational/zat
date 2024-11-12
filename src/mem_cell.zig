@@ -20,7 +20,6 @@ test "attr invariance" {
         },
     };
 
-    std.debug.print("{d}\n", .{@sizeOf(MemoryCell)});
     assert(@sizeOf(MemoryCell) == 4);
     assert(cell.garbage.is_garbage);
     assert(cell.header.is_garbage);

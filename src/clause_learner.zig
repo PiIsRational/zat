@@ -27,7 +27,7 @@ pub fn init(gpa: Allocator, size: usize) !ClauseLearner {
 /// learns a new clause from the conflict
 ///
 /// returns the lowest `choice_count` at which the clause asserts
-pub fn learn(self: *ClauseLearner, conflict: Conflict, instance: SatInstance) !usize {
+pub fn learn(self: *ClauseLearner, conflict: Conflict, instance: *SatInstance) !usize {
     assert(self.literals.items.len == 0);
 
     // learn the empty clause (the conflict was at level 0 which means trivially unsat)
@@ -89,13 +89,16 @@ pub fn learn(self: *ClauseLearner, conflict: Conflict, instance: SatInstance) !u
         std.mem.swap(Literal, lit, second);
     }
 
+    instance.chooser.grow();
+
     return max_choice_count;
 }
 
-fn appendLit(self: *ClauseLearner, lit: Literal, instance: SatInstance) !void {
+fn appendLit(self: *ClauseLearner, lit: Literal, instance: *SatInstance) !void {
     const choice_count = instance.variables.getChoiceCount(lit.toVar()).*;
     if (choice_count == 0 or self.set.isSet(lit.toVar())) return;
     self.set.set(lit.toVar());
+    instance.chooser.bump(@intCast(lit.toVar()));
 
     if (choice_count == instance.choice_count) {
         // add the literal only virtually and not to the clause

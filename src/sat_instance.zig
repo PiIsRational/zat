@@ -16,6 +16,7 @@ const Conflict = @import("impl.zig").Conflict;
 const UnitSetting = @import("watch.zig").UnitSetting;
 const ImplGraphWriter = @import("impl_graph_writer.zig");
 const ClauseLearner = @import("clause_learner.zig");
+const Chooser = @import("chooser.zig");
 
 var flag = false;
 
@@ -25,6 +26,7 @@ pub const SatInstance = struct {
     binary_clauses: BinClauses,
     watch: WatchList,
     variables: Impls,
+    chooser: Chooser,
     choice_count: usize = 0,
     setting_order: std.ArrayList(usize),
     units_to_set: std.ArrayList(UnitSetting),
@@ -42,9 +44,10 @@ pub const SatInstance = struct {
         return .{
             .allocator = allocator,
             .setting_order = setting_order,
-            .clauses = try ClauseDb.init(allocator, variables),
             .watch = try WatchList.init(variables, allocator),
+            .chooser = try Chooser.init(allocator, variables),
             .variables = try Impls.init(allocator, variables),
+            .clauses = try ClauseDb.init(allocator, variables),
             .learner = try ClauseLearner.init(allocator, variables),
             .units_to_set = std.ArrayList(UnitSetting).init(allocator),
             .binary_clauses = try BinClauses.init(allocator, variables),
@@ -169,18 +172,17 @@ pub const SatInstance = struct {
     fn choose(self: *Self) !?Conflict {
         assert(self.units_to_set.items.len == 0);
 
-        // TODO: implement proper heuristics to make this work
-        for (self.variables.impls, 0..) |v, i| {
-            if (v.variable != .unassigned) continue;
+        while (self.chooser.nextVar()) |variable| {
+            if (self.variables.get(variable).variable != .unassigned) continue;
 
-            // as there is no reason the reason and
-            // it is a test assignement choose any literal
             self.choice_count += 1;
-            return try self.set(i, .pos, .unary);
+            return try self.set(variable, .pos, .unary);
         }
 
         // should not arrise
-        unreachable;
+        assert(self.chooser.len() == 0);
+        assert(self.setting_order.items.len == self.variables.impls.len);
+        return null;
     }
 
     /// the method used to resolve a conflict in the assignement
@@ -193,8 +195,8 @@ pub const SatInstance = struct {
         // the current unit clauses did lead to a problem
         self.units_to_set.clearRetainingCapacity();
 
-        const backtack_place = try self.learner.learn(conflict, self.*);
-        self.backtrack(backtack_place);
+        const backtack_place = try self.learner.learn(conflict, self);
+        try self.backtrack(backtack_place);
 
         const learned = self.learner.literals.items;
 
@@ -223,7 +225,7 @@ pub const SatInstance = struct {
         return true;
     }
 
-    fn backtrack(self: *SatInstance, to: usize) void {
+    fn backtrack(self: *SatInstance, to: usize) !void {
         if (self.choice_count <= to) return;
         self.choice_count = to;
 
@@ -233,6 +235,7 @@ pub const SatInstance = struct {
 
             // reset the variable
             variable.* = Impl.init();
+            try self.chooser.append(@intCast(value));
             _ = self.setting_order.pop();
         }
     }
@@ -290,8 +293,25 @@ pub const SatInstance = struct {
         self.binary_clauses.deinit();
         self.setting_order.deinit();
         self.clauses.deinit();
+        self.chooser.deinit();
         self.learner.deinit();
         self.units.deinit();
         self.watch.deinit();
     }
 };
+
+test {
+    _ = @import("variable.zig");
+    _ = @import("clause.zig");
+    _ = @import("clause_db.zig");
+    _ = @import("result.zig");
+    _ = @import("literal.zig");
+    _ = @import("binary_clauses.zig");
+    _ = @import("watch.zig");
+    _ = @import("clause.zig");
+    _ = @import("impl.zig");
+    _ = @import("watch.zig");
+    _ = @import("impl_graph_writer.zig");
+    _ = @import("clause_learner.zig");
+    _ = @import("chooser.zig");
+}

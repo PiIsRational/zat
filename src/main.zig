@@ -39,3 +39,8 @@ pub fn main() !void {
         .unsat => std.posix.exit(UNSAT_EXIT),
     }
 }
+
+test {
+    _ = @import("sat_instance.zig");
+    _ = @import("instance_builder.zig");
+}
