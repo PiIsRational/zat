@@ -17,6 +17,7 @@ const UnitSetting = @import("watch.zig").UnitSetting;
 const ImplGraphWriter = @import("impl_graph_writer.zig");
 const ClauseLearner = @import("clause_learner.zig");
 const Chooser = @import("chooser.zig");
+const ClauseHeuristic = @import("clause.zig").ClauseHeuristic;
 
 var flag = false;
 
@@ -31,6 +32,7 @@ pub const SatInstance = struct {
     setting_order: std.ArrayList(usize),
     units_to_set: std.ArrayList(UnitSetting),
     learner: ClauseLearner,
+    heuristic: ClauseHeuristic,
     conflicts: usize = 0,
 
     const Self = @This();
@@ -50,6 +52,7 @@ pub const SatInstance = struct {
             .clauses = try ClauseDb.init(allocator, variables),
             .learner = try ClauseLearner.init(allocator, variables),
             .units_to_set = std.ArrayList(UnitSetting).init(allocator),
+            .heuristic = try ClauseHeuristic.init(allocator, variables),
             .binary_clauses = try BinClauses.init(allocator, variables),
         };
     }
@@ -99,22 +102,23 @@ pub const SatInstance = struct {
     }
 
     /// adds a clause to this sat instance
-    pub fn addClause(self: *Self, literals: []Literal) !void {
+    pub fn addClause(self: *Self, literals: []Literal, lbd: u16) !void {
         // append a unit clause
         if (literals.len == 1) {
             try self.addUnit(.{ .to_set = literals[0], .reason = .unary });
+            assert(lbd <= 1);
             return;
         }
 
         // binary clause
         if (literals.len == 2) {
             try self.binary_clauses.addBinary(literals[0], literals[1]);
+            assert(lbd <= 2);
             return;
         }
 
         // normal clause
-        const c = try self.clauses.addClause(literals);
-        try self.watch.append(c, .{ literals[0], literals[1] }, self.clauses);
+        _ = try self.clauses.addClause(literals, lbd, &self.watch);
     }
 
     /// this is a debugging method!
@@ -130,8 +134,10 @@ pub const SatInstance = struct {
 
     /// checks if the instance is currently satisfied
     fn isSat(self: Self) bool {
-        for (self.clauses.clauses.items) |c| {
-            if (!c.isSatisfied(self)) return false;
+        for (self.watch.watches) |watches| {
+            for (watches.items) |watch| {
+                if (!watch.clause.isSatisfied(self)) return false;
+            }
         }
 
         return true;
@@ -225,16 +231,17 @@ pub const SatInstance = struct {
             std.debug.print("}}\n", .{});
         }
 
+        const lbd: u16 = undefined;
+
         const reason: Reason = switch (learned.len) {
             0 => return false,
             1 => .unary,
             2 => blk: {
-                try self.addClause(learned);
+                try self.addClause(learned, 0);
                 break :blk .{ .binary = learned[1] };
             },
             else => blk: {
-                const clause = try self.clauses.addClause(learned);
-                try self.watch.append(clause, .{ learned[0], learned[1] }, self.clauses);
+                const clause = try self.clauses.addClause(learned, lbd, &self.watch);
                 break :blk .{ .other = clause };
             },
         };
@@ -308,6 +315,7 @@ pub const SatInstance = struct {
     }
 
     pub fn deinit(self: *SatInstance) void {
+        self.heuristic.deinit(self.allocator);
         self.allocator.free(self.variables);
         self.binary_clauses.deinit();
         self.setting_order.deinit();

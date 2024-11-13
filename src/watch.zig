@@ -13,7 +13,6 @@ const opts = @import("build_opt");
 
 pub const WatchList = struct {
     watches: []std.ArrayList(Watch),
-    initialized: bool,
     allocator: Allocator,
 
     const Self = @This();
@@ -30,24 +29,9 @@ pub const WatchList = struct {
         }
 
         return .{
-            .initialized = false,
             .watches = watches,
             .allocator = allocator,
         };
-    }
-
-    pub fn setUp(self: *Self, db: ClauseDb) !void {
-        if (self.initialized) return;
-        self.initialized = true;
-
-        // iterate through each clause and if (var_ptr.isEqual(state)) return null;check if it is garbage or no
-        for (db.clauses.items) |clause| {
-            assert(!clause.isGarbage(db));
-
-            const lits = clause.getLiterals(db);
-            assert(!lits[0].eql(lits[1]));
-            try self.append(clause, .{ lits[0], lits[1] }, db);
-        }
     }
 
     /// sets `literal` to true and checks for unit clauses
@@ -86,8 +70,8 @@ pub const WatchList = struct {
     /// The two given literals should be different variables and included in the clause.
     /// Additionally they should not be negated.
     pub fn append(self: *Self, clause: Clause, literals: [2]Literal, db: ClauseDb) !void {
-        if (!self.initialized) return;
-
+        assert(!clause.isGarbage(db));
+        assert(!literals[0].eql(literals[1]));
         for (literals, 0..) |literal, i| {
             assert(!literal.is_garbage);
             assert(clause.getLiterals(db)[i].eql(literal) or
@@ -110,7 +94,6 @@ pub const WatchList = struct {
 
     /// the destructor of the struct
     pub fn deinit(self: *Self) void {
-        self.initialized = false;
         for (self.watches) |watch| watch.deinit();
         self.allocator.free(self.watches);
     }
@@ -200,8 +183,8 @@ pub const Watch = struct {
             writer: anytype,
         ) !void {
             try writer.print(
-                "sets: {d}, blocking true: {d}, watch swaps: {d}, no swaps: {d}\n" ++
-                    " other true: {d}, new watch count: {d}, new watch dist: {d}, conflict: {d}, unit: {d}\n",
+                "c sets: {d}, blocking true: {d}, watch swaps: {d}, no swaps: {d}\n" ++
+                    "c other true: {d}, new watch count: {d}, new watch dist: {d}, conflict: {d}, unit: {d}\n",
                 .{
                     self.sets,
                     self.blocking_true,

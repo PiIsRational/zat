@@ -5,13 +5,16 @@ const Literal = @import("literal.zig").Literal;
 const Clause = @import("clause.zig").Clause;
 const ClauseHeader = @import("clause.zig").ClauseHeader;
 const MemCell = @import("mem_cell.zig").MemoryCell;
+const ClauseTier = @import("mem_cell.zig").ClauseTier;
+const WatchList = @import("watch.zig").WatchList;
 
-const MIN_CLAUSE_SIZE: usize = 4;
+const MIN_CLAUSE_SIZE = CLAUSE_HEADER_SIZE + MIN_CLAUSE_LITS;
+const CLAUSE_HEADER_SIZE: usize = 2;
+const MIN_CLAUSE_LITS: usize = 3;
 
 /// ClauseDb is the database for all clauses with at least 3 literals
 const ClauseDb = @This();
 
-clauses: std.ArrayList(Clause),
 memory: std.ArrayList(MemCell),
 allocator: Allocator,
 
@@ -21,6 +24,8 @@ free_list: []u32,
 /// the fragmentation counts the amount of literals contained in the free list
 /// if the fragmentation gets too large the database should get defragmented
 fragmentation: usize = 0,
+clause_count: usize = 0,
+variables: usize,
 
 /// the constructor if the clause database
 pub fn init(allocator: Allocator, variables: usize) !ClauseDb {
@@ -32,10 +37,10 @@ pub fn init(allocator: Allocator, variables: usize) !ClauseDb {
     @memset(free_list, 0);
 
     return .{
-        .clauses = std.ArrayList(Clause).init(allocator),
         .allocator = allocator,
         .memory = memory,
         .free_list = free_list,
+        .variables = variables,
     };
 }
 
@@ -48,76 +53,74 @@ fn getBucket(clause_len: usize) usize {
 }
 
 /// adds a clause containing `literals` to the clause database
-pub fn addClause(self: *ClauseDb, literals: []Literal) !Clause {
+pub fn addClause(self: *ClauseDb, literals: []Literal, lbd: u16, watch: *WatchList) !Clause {
     var clause = try self.alloc(literals.len);
+    clause.setLbd(self.*, lbd);
+    clause.setTier(self.*, ClauseTier.fromLbd(lbd));
     @memcpy(clause.getLitsMut(self.*), literals);
 
+    try watch.append(clause, .{ literals[0], literals[1] }, self.*);
     return clause;
 }
 
 /// the method used to allocate a clause
 pub fn alloc(self: *ClauseDb, size: usize) !Clause {
-    std.debug.assert(size >= 3);
+    std.debug.assert(size >= MIN_CLAUSE_LITS);
+    self.clause_count += 1;
 
     if (self.fragmentation > 0) {
         if (self.allocStandard(size)) |clause| return clause;
     }
 
     const clause = try self.allocEnd(@intCast(size));
-    try self.clauses.append(clause);
 
     return clause;
 }
 
 /// frees `clause` from the clause database
-pub fn free(self: ClauseDb, clause: *Clause) void {
+pub fn free(self: ClauseDb, clause: Clause, watch: *WatchList) !void {
     const len = clause.getLength(self);
+    self.clause_count -= 1;
 
-    // add one because the clause length does not include the header
-    self.fragmentation += len + 1;
+    self.fragmentation += len + CLAUSE_HEADER_SIZE;
     const mem_slice = self.memory.items;
 
-    const garbage_slice = mem_slice[clause.index .. clause.index + len + 1];
+    const garbage_slice = mem_slice[clause.index .. clause.index + len + CLAUSE_HEADER_SIZE];
     const bucket = getBucket(len);
 
-    garbage_slice[0].garbage = .{
-        .is_garbage = true,
-        .len = len,
-    };
+    garbage_slice[0].garbage = .{ .is_garbage = true, .len = len };
     garbage_slice[1].next = self.free_list[bucket];
 
     self.free_list[bucket] = clause.index;
-    clause.* = self.clauses.pop();
+
+    if (self.fragmentation < self.memory.items.len / 2) try self.defragment(watch);
 }
 
 /// the destructor of the clause database
 pub fn deinit(self: *ClauseDb) void {
-    self.clauses.deinit();
     self.memory.deinit();
     self.allocator.free(self.free_list);
 }
 
 /// the function used to defragment the heap
-fn defragment(self: *ClauseDb) void {
-    // TODO: this is nice but needs to work with the watchlist
-    self.clauses.clearRetainingCapacity();
-    var old_literals = self.literals;
-    self.literals = std.ArrayList(MemCell).init(self.literals.allocator);
+fn defragment(self: *ClauseDb, watch: *WatchList) !void {
+    const current_self = self.*;
+    self.* = try init(current_self.allocator, current_self.variables);
 
-    var i: usize = 0;
-    while (i < old_literals.items.len) : (i += 1) {
-        const current = &old_literals.items[i];
-
-        if (current.header.is_garbage) {
-            i += current.garbage.len;
-        } else {
-            const old_clause = Clause.fromHeader(current);
-            try self.clauses.append(self.allocEnd(old_clause.getLength()));
-            i += current.header.len;
+    for (watch.watches) |watches| {
+        for (watches.items) |*w| {
+            if (w.clause.isGarbage(current_self)) continue;
+            const literals = w.clause.getLitsMut(current_self);
+            const lbd = w.clause.getLbd(current_self);
+            var clause = try self.allocEnd(literals.len);
+            clause.setLbd(self.*, lbd);
+            clause.setTier(self.*, ClauseTier.fromLbd(lbd));
+            @memcpy(clause.getLitsMut(self.*), literals);
+            w.clause = clause;
         }
     }
 
-    for (self.free_list) |*value| value = null;
+    current_self.deinit();
 }
 
 fn allocStandard(self: *ClauseDb, size: usize) ?Clause {
@@ -129,7 +132,7 @@ fn allocStandard(self: *ClauseDb, size: usize) ?Clause {
     if (bucket_list != 0) {
         const header = mem_slice[bucket_list];
         assert(header.garbage.is_garbage);
-        const usable = header.garbage.len >= size;
+        const usable = header.garbage.len + 1 >= size + CLAUSE_HEADER_SIZE;
         if (usable) return self.allocToGarbage(header, size, bucket_list);
     }
 
@@ -156,13 +159,13 @@ fn allocToGarbage(self: *ClauseDb, header: MemCell, size: usize, place: usize) C
     } };
 
     // now that we allocated we can reduce the fragmentation count
-    self.fragmentation -= size + 1;
+    self.fragmentation -= size + CLAUSE_HEADER_SIZE;
     const new_clause = Clause.fromHeader(place);
 
     if (header.garbage.len <= size + MIN_CLAUSE_SIZE) return new_clause;
 
     const garbage_idx = place + size;
-    const garbage_len = header.garbage.len - size - 1;
+    const garbage_len = header.garbage.len - size - CLAUSE_HEADER_SIZE;
 
     mem_slice[garbage_idx] = .{ .garbage = .{
         .is_garbage = true,
@@ -183,7 +186,7 @@ fn allocEnd(self: *ClauseDb, size: u32) !Clause {
 
     const header = self.memory.items.len;
 
-    const clause_slice = try self.memory.addManyAsSlice(size + 1);
+    const clause_slice = try self.memory.addManyAsSlice(size + CLAUSE_HEADER_SIZE);
     clause_slice[0] = .{ .header = .{ .is_garbage = false, .len = @intCast(size) } };
 
     return Clause.fromHeader(header);
@@ -191,5 +194,5 @@ fn allocEnd(self: *ClauseDb, size: u32) !Clause {
 
 /// the amount of clauses contained in the model
 pub fn getLength(self: ClauseDb) usize {
-    return self.clauses.items.len;
+    return self.clause_count;
 }

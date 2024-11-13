@@ -28,7 +28,7 @@ pub fn main() !void {
     var result = try instance.solve();
 
     try stdout.print("c {d} conflicts\n", .{instance.conflicts});
-    try stdout.print("c {s}", .{Watch.stats});
+    try stdout.print("{s}", .{Watch.stats});
     try stdout.print("s {s}\n", .{result.toString()});
 
     switch (result) {

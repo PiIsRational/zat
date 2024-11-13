@@ -69,8 +69,6 @@ pub const InstanceBuilder = struct {
             return ParseError.IllegalClauseCount;
         }
 
-        try instance.watch.setUp(instance.clauses);
-
         return instance;
     }
 
@@ -161,7 +159,9 @@ pub const InstanceBuilder = struct {
         const literals = self.trivialSimpl(self.literal_list.items);
 
         if (self.triviallyTrue(literals)) return;
-        try instance.addClause(literals);
+
+        // the lbd is 0 as the given clauses should never be deleted
+        try instance.addClause(literals, 0);
     }
 
     fn isWhitespace(character: u8) bool {
