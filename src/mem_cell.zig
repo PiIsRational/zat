@@ -2,13 +2,23 @@ const std = @import("std");
 const assert = std.debug.assert;
 const Literal = @import("literal.zig").Literal;
 const ClauseHeader = @import("clause.zig").ClauseHeader;
-const Garbage = @import("mem_garbage.zig").GarbageHeader;
 
 pub const MemoryCell = packed union {
     literal: Literal,
     header: ClauseHeader,
-    garbage: Garbage,
-    integer: u32,
+    garbage: GarbageHeader,
+
+    // used to point to the next garbage in the free list
+    next: u32,
+};
+
+pub const GarbageHeader = packed struct {
+    is_garbage: bool,
+    len: u31,
+
+    comptime {
+        assert(@sizeOf(ClauseHeader) == 4);
+    }
 };
 
 test "attr invariance" {

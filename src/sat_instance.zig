@@ -3,7 +3,7 @@ const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const Variable = @import("variable.zig").Variable;
 const Clause = @import("clause.zig").Clause;
-const ClauseDb = @import("clause_db.zig").ClauseDb;
+const ClauseDb = @import("clause_db.zig");
 const SatResult = @import("result.zig").SatResult;
 const Literal = @import("literal.zig").Literal;
 const BinClauses = @import("binary_clauses.zig").BinClauses;
@@ -81,7 +81,7 @@ pub const SatInstance = struct {
 
         const var_ptr = self.variables.getVar(variable);
         if (var_ptr.* == state) return null;
-        assert(!var_ptr.unassigned());
+        assert(var_ptr.unassigned());
 
         self.variables.set(variable, state, reason, self.choice_count);
         try self.setting_order.append(variable);

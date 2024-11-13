@@ -1,12 +1,10 @@
 const std = @import("std");
 const assert = std.debug.assert;
-const GarbageFlag = @import("mem_cell.zig").GarbageFlag;
-const LiteralFlag = @import("mem_cell.zig").LiteralFlag;
 const Literal = @import("literal.zig").Literal;
 const Variable = @import("variable.zig").Variable;
 const MemoryCell = @import("mem_cell.zig").MemoryCell;
 const SatInstance = @import("sat_instance.zig").SatInstance;
-const ClauseDb = @import("clause_db.zig").ClauseDb;
+const ClauseDb = @import("clause_db.zig");
 
 /// the Clause struct.
 ///
@@ -101,6 +99,9 @@ pub const Clause = struct {
 /// it contains the meta informations about the clause
 ///
 /// after that the literals are stored in order
+///
+/// this structure should be kept shortlived as it can be invalidated
+/// after allocating a new clause on the `ClauseDb`
 pub const ClauseRef = struct {
     lits: []const Literal,
 
@@ -137,6 +138,4 @@ pub const ClauseHeader = packed struct {
     comptime {
         assert(@sizeOf(ClauseHeader) == 4);
     }
-
-    const Self = @This();
 };
