@@ -78,8 +78,8 @@ pub fn alloc(self: *ClauseDb, size: usize) !Clause {
 }
 
 /// frees `clause` from the clause database
-pub fn free(self: ClauseDb, clause: Clause, watch: *WatchList) !void {
-    const len = clause.getLength(self);
+pub fn free(self: *ClauseDb, clause: Clause) !void {
+    const len = clause.getLength(self.*);
     self.clause_count -= 1;
 
     self.fragmentation += len + CLAUSE_HEADER_SIZE;
@@ -88,12 +88,10 @@ pub fn free(self: ClauseDb, clause: Clause, watch: *WatchList) !void {
     const garbage_slice = mem_slice[clause.index .. clause.index + len + CLAUSE_HEADER_SIZE];
     const bucket = getBucket(len);
 
-    garbage_slice[0].garbage = .{ .is_garbage = true, .len = len };
+    garbage_slice[0].garbage = .{ .is_garbage = true, .len = @intCast(len) };
     garbage_slice[1].next = self.free_list[bucket];
 
     self.free_list[bucket] = clause.index;
-
-    if (self.fragmentation < self.memory.items.len / 2) try self.defragment(watch);
 }
 
 /// the destructor of the clause database
@@ -103,8 +101,10 @@ pub fn deinit(self: *ClauseDb) void {
 }
 
 /// the function used to defragment the heap
-fn defragment(self: *ClauseDb, watch: *WatchList) !void {
-    const current_self = self.*;
+pub fn defragment(self: *ClauseDb, watch: *WatchList) !void {
+    if (self.fragmentation < self.memory.items.len / 2) return;
+
+    var current_self = self.*;
     self.* = try init(current_self.allocator, current_self.variables);
 
     for (watch.watches) |watches| {
@@ -112,7 +112,7 @@ fn defragment(self: *ClauseDb, watch: *WatchList) !void {
             if (w.clause.isGarbage(current_self)) continue;
             const literals = w.clause.getLitsMut(current_self);
             const lbd = w.clause.getLbd(current_self);
-            var clause = try self.allocEnd(literals.len);
+            var clause = try self.allocEnd(@intCast(literals.len));
             clause.setLbd(self.*, lbd);
             clause.setTier(self.*, ClauseTier.fromLbd(lbd));
             @memcpy(clause.getLitsMut(self.*), literals);

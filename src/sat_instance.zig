@@ -18,6 +18,7 @@ const ImplGraphWriter = @import("impl_graph_writer.zig");
 const ClauseLearner = @import("clause_learner.zig");
 const Chooser = @import("chooser.zig");
 const ClauseHeuristic = @import("clause.zig").ClauseHeuristic;
+const ClauseTier = @import("mem_cell.zig").ClauseTier;
 
 var flag = false;
 
@@ -85,6 +86,10 @@ pub const SatInstance = struct {
         const var_ptr = self.variables.getVar(variable);
         if (var_ptr.* == state) return null;
         assert(var_ptr.unassigned());
+        switch (reason) {
+            .unary, .binary => {},
+            .other => |clause| clause.setUsed(self.clauses, true),
+        }
 
         self.variables.set(variable, state, reason, self.choice_count);
         try self.setting_order.append(variable);
@@ -216,14 +221,19 @@ pub const SatInstance = struct {
     /// iff returns true the backtracking was successful
     fn resolve(self: *Self, conflict: Conflict) !bool {
         self.conflicts += 1;
+        try self.heuristic.conflict(&self.clauses, &self.watch);
 
         // the current unit clauses did lead to a problem
         self.units_to_set.clearRetainingCapacity();
 
         const backtack_place = try self.learner.learn(conflict, self);
-        try self.backtrack(backtack_place);
-
         const learned = self.learner.literals.items;
+        const learned_glue = if (learned.len < 3)
+            0
+        else
+            self.heuristic.computeGlue(self.*, learned);
+
+        try self.backtrack(backtack_place);
 
         if (flag) {
             std.debug.print("appending: {{ ", .{});
@@ -242,6 +252,8 @@ pub const SatInstance = struct {
             },
             else => blk: {
                 const clause = try self.clauses.addClause(learned, lbd, &self.watch);
+                clause.setLbd(self.clauses, learned_glue);
+                clause.setTier(self.clauses, ClauseTier.fromLbd(learned_glue));
                 break :blk .{ .other = clause };
             },
         };
@@ -263,6 +275,20 @@ pub const SatInstance = struct {
             variable.invalidate();
             try self.chooser.append(@intCast(value));
             _ = self.setting_order.pop();
+
+            switch (variable.reason) {
+                .unary, .binary => {},
+                .other => |clause| {
+                    const lits = clause.getLiterals(self.clauses);
+                    const glue = self.heuristic.computeGlue(self.*, lits);
+                    const curr_glue = clause.getLbd(self.clauses);
+                    if (curr_glue <= glue) continue;
+                    clause.setLbd(self.clauses, curr_glue);
+                    clause.setTier(self.clauses, ClauseTier.fromLbd(curr_glue));
+                    clause.setConflict(self.clauses, true);
+                    clause.setUsed(self.clauses, false);
+                },
+            }
         }
     }
 

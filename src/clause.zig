@@ -188,9 +188,14 @@ pub const ClauseHeuristic = struct {
     } = .{};
 
     tier_lookup: []bool,
+    conflict_count: usize = 0,
+    variables: usize,
 
     pub fn init(allocator: Allocator, variables: usize) !ClauseHeuristic {
-        return .{ .tier_lookup = try allocator.alloc(bool, variables) };
+        return .{
+            .tier_lookup = try allocator.alloc(bool, variables),
+            .variables = variables,
+        };
     }
 
     pub fn computeGlue(
@@ -200,14 +205,14 @@ pub const ClauseHeuristic = struct {
     ) u16 {
         var lbd: u16 = 0;
         for (lits) |lit| {
-            const level = instance.variables.getChoiceCount(lit.toVar());
+            const level = instance.variables.getChoiceCount(lit.toVar()).*;
             if (self.tier_lookup[level]) continue;
             self.tier_lookup[level] = true;
             lbd += 1;
         }
 
         for (lits) |lit| {
-            const level = instance.variables.getChoiceCount(lit.toVar());
+            const level = instance.variables.getChoiceCount(lit.toVar()).*;
             self.tier_lookup[level] = false;
         }
 
@@ -216,6 +221,15 @@ pub const ClauseHeuristic = struct {
 
     pub fn deinit(self: ClauseHeuristic, allocator: Allocator) void {
         allocator.free(self.tier_lookup);
+    }
+
+    pub fn conflict(self: *ClauseHeuristic, db: *ClauseDb, watch: *WatchList) !void {
+        self.conflict_count += 1;
+
+        if (self.conflict_count < self.variables) return;
+        try self.freeLocal(db, watch);
+        self.moveMid(db.*, watch);
+        self.conflict_count = 0;
     }
 
     pub fn moveMid(_: ClauseHeuristic, db: ClauseDb, watch: *WatchList) void {
@@ -243,24 +257,28 @@ pub const ClauseHeuristic = struct {
         }
     }
 
-    pub fn freeLocal(_: ClauseHeuristic, db: ClauseDb, watch: *WatchList) !void {
+    pub fn freeLocal(_: ClauseHeuristic, db: *ClauseDb, watch: *WatchList) !void {
         for (watch.watches) |watches| {
             for (watches.items) |w| {
                 const clause = w.clause;
-                if (clause.isGarbage(db) or clause.getTier(db) != .local) continue;
+                if (clause.isGarbage(db.*) or clause.getTier(db.*) != .local) continue;
 
                 // the idea is that clauses that have seen some use
                 ClauseHeuristic.stats.local_count += 1;
-                if (clause.getConflict(db)) {
-                    clause.setTier(db, .mid);
-                    clause.setConflict(db, false);
-                } else if (!clause.getUsed(db)) {
+                if (clause.getConflict(db.*) and
+                    ClauseTier.fromLbd(clause.getLbd(db.*)) == .mid)
+                {
+                    clause.setTier(db.*, .mid);
+                    clause.setConflict(db.*, false);
+                } else if (!clause.getUsed(db.*)) {
                     ClauseHeuristic.stats.freed_locals += 1;
-                    try db.free(clause, watch);
+                    try db.free(clause);
                 } else {
                     ClauseHeuristic.stats.local_count -= 1;
                 }
             }
         }
+
+        try db.defragment(watch);
     }
 };

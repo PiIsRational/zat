@@ -25,10 +25,15 @@ pub fn main() !void {
 
     try stdout.print("c FILE: {s}\n", .{args[1]});
     var instance = try InstanceBuilder.loadFromFile(gpa.allocator(), args[1]);
+    const base_clauses = instance.clauses.getLength();
     var result = try instance.solve();
 
     try stdout.print("c {d} conflicts\n", .{instance.conflicts});
     try stdout.print("{s}", .{Watch.stats});
+    try stdout.print(
+        "c {d} learned clauses\n",
+        .{instance.clauses.getLength() - base_clauses},
+    );
     try stdout.print("s {s}\n", .{result.toString()});
 
     switch (result) {
