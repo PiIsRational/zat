@@ -1,0 +1,14 @@
+.{
+    .name = .zat,
+    .version = "0.1.0",
+    .deps = .{},
+    .paths = .{
+        "src",
+        "build.zig",
+        "build.zig.zon",
+        "test",
+        "README.md",    
+        "LICENSE",
+    },
+    .fingerprint = 0x8da9db577ad0237c,
+}

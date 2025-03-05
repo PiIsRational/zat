@@ -106,13 +106,15 @@ pub const WatchList = struct {
     }
 
     /// remove a watch from the watchlist of a given literal
-    fn remove(self: *Self, watch: *Watch, literal: Literal) void {
+    pub fn remove(self: *Self, watch: *Watch, literal: Literal) void {
         // the watch should be in the watchlist of `literal`
-        assert(@intFromPtr(watch) >= @intFromPtr(&self.watches[literal.toIndex()].items[0]));
+        assert(@intFromPtr(watch) >=
+            @intFromPtr(&self.watches[literal.toIndex()].items[0]));
         assert(@intFromPtr(watch) <=
-            @intFromPtr(&self.watches[literal.toIndex()].items[self.watches[literal.toIndex()].items.len - 1]));
+            @intFromPtr(&self.watches[literal.toIndex()]
+                .items[self.watches[literal.toIndex()].items.len - 1]));
 
-        watch.* = self.watches[literal.toIndex()].pop();
+        watch.* = self.watches[literal.toIndex()].pop().?;
     }
 
     /// add a watch to the watchlist of a literal

@@ -150,7 +150,7 @@ pub const SatInstance = struct {
 
     /// set all the unit clauses
     fn setUnits(self: *Self) !?Conflict {
-        while (self.units_to_set.popOrNull()) |to_set| {
+        while (self.units_to_set.pop()) |to_set| {
             if (try self.set(
                 to_set.to_set.variable,
                 if (to_set.to_set.is_negated) .neg else .pos,
@@ -224,6 +224,12 @@ pub const SatInstance = struct {
         try self.heuristic.conflict(&self.clauses, &self.watch);
 
         // the current unit clauses did lead to a problem
+        for (self.units_to_set.items) |unit| {
+            switch (unit.reason) {
+                .other => |clause| clause.setUsed(self.clauses, false),
+                else => {},
+            }
+        }
         self.units_to_set.clearRetainingCapacity();
 
         const backtack_place = try self.learner.learn(conflict, self);
@@ -274,7 +280,7 @@ pub const SatInstance = struct {
             // makes the variable unassigned but keeps it`s fase
             variable.invalidate();
             try self.chooser.append(@intCast(value));
-            _ = self.setting_order.pop();
+            _ = self.setting_order.pop().?;
 
             switch (variable.reason) {
                 .unary, .binary => {},
@@ -282,11 +288,11 @@ pub const SatInstance = struct {
                     const lits = clause.getLiterals(self.clauses);
                     const glue = self.heuristic.computeGlue(self.*, lits);
                     const curr_glue = clause.getLbd(self.clauses);
+                    clause.setConflict(self.clauses, true);
+                    clause.setUsed(self.clauses, false);
                     if (curr_glue <= glue) continue;
                     clause.setLbd(self.clauses, curr_glue);
                     clause.setTier(self.clauses, ClauseTier.fromLbd(curr_glue));
-                    clause.setConflict(self.clauses, true);
-                    clause.setUsed(self.clauses, false);
                 },
             }
         }

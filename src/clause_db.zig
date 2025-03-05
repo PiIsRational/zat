@@ -10,6 +10,7 @@ const WatchList = @import("watch.zig").WatchList;
 
 const MIN_CLAUSE_SIZE = CLAUSE_HEADER_SIZE + MIN_CLAUSE_LITS;
 const CLAUSE_HEADER_SIZE: usize = 2;
+const GARBAGE_HEADER_SIZE: usize = 2;
 const MIN_CLAUSE_LITS: usize = 3;
 
 /// ClauseDb is the database for all clauses with at least 3 literals
@@ -49,7 +50,7 @@ fn approxLog(val: usize) usize {
 }
 
 fn getBucket(clause_len: usize) usize {
-    return approxLog(clause_len - MIN_CLAUSE_SIZE);
+    return approxLog(clause_len - MIN_CLAUSE_LITS);
 }
 
 /// adds a clause containing `literals` to the clause database
@@ -57,6 +58,7 @@ pub fn addClause(self: *ClauseDb, literals: []Literal, lbd: u16, watch: *WatchLi
     var clause = try self.alloc(literals.len);
     clause.setLbd(self.*, lbd);
     clause.setTier(self.*, ClauseTier.fromLbd(lbd));
+    clause.setUsed(self.*, false);
     @memcpy(clause.getLitsMut(self.*), literals);
 
     try watch.append(clause, .{ literals[0], literals[1] }, self.*);
@@ -65,33 +67,46 @@ pub fn addClause(self: *ClauseDb, literals: []Literal, lbd: u16, watch: *WatchLi
 
 /// the method used to allocate a clause
 pub fn alloc(self: *ClauseDb, size: usize) !Clause {
+    self.checkFreeGarbage();
     std.debug.assert(size >= MIN_CLAUSE_LITS);
     self.clause_count += 1;
 
     if (self.fragmentation > 0) {
-        if (self.allocStandard(size)) |clause| return clause;
+        if (self.allocStandard(size)) |clause| {
+            self.checkFreeGarbage();
+            return clause;
+        }
     }
 
     const clause = try self.allocEnd(@intCast(size));
+    self.checkFreeGarbage();
 
     return clause;
 }
 
 /// frees `clause` from the clause database
 pub fn free(self: *ClauseDb, clause: Clause) !void {
+    assert(clause.index != 0);
     const len = clause.getLength(self.*);
+    assert(!clause.isGarbage(self.*));
+    assert(len < self.variables);
+
     self.clause_count -= 1;
 
     self.fragmentation += len + CLAUSE_HEADER_SIZE;
     const mem_slice = self.memory.items;
 
     const garbage_slice = mem_slice[clause.index .. clause.index + len + CLAUSE_HEADER_SIZE];
+    const garbage_len = garbage_slice.len - GARBAGE_HEADER_SIZE;
+
+    // buckets are oriented after clause sizes and not grbage sizes
     const bucket = getBucket(len);
 
-    garbage_slice[0].garbage = .{ .is_garbage = true, .len = @intCast(len) };
+    garbage_slice[0].garbage = .{ .is_garbage = true, .len = @intCast(garbage_len) };
     garbage_slice[1].next = self.free_list[bucket];
 
     self.free_list[bucket] = clause.index;
+    self.checkFreeGarbage();
 }
 
 /// the destructor of the clause database
@@ -123,6 +138,17 @@ pub fn defragment(self: *ClauseDb, watch: *WatchList) !void {
     current_self.deinit();
 }
 
+fn checkFreeGarbage(self: ClauseDb) void {
+    for (self.free_list) |list| {
+        if (list == 0) continue;
+        var link = list;
+        while (link != 0) {
+            assert(self.memory.items[link].garbage.is_garbage);
+            link = self.memory.items[link + 1].next;
+        }
+    }
+}
+
 fn allocStandard(self: *ClauseDb, size: usize) ?Clause {
     const bucket = getBucket(size);
 
@@ -132,49 +158,57 @@ fn allocStandard(self: *ClauseDb, size: usize) ?Clause {
     if (bucket_list != 0) {
         const header = mem_slice[bucket_list];
         assert(header.garbage.is_garbage);
-        const usable = header.garbage.len + 1 >= size + CLAUSE_HEADER_SIZE;
-        if (usable) return self.allocToGarbage(header, size, bucket_list);
+        const usable = header.garbage.len + GARBAGE_HEADER_SIZE >= size + CLAUSE_HEADER_SIZE;
+        if (usable) return self.allocToGarbage(header, size, bucket_list, bucket);
     }
 
-    if (bucket == self.free_list.len) return null;
+    if (bucket + 1 == self.free_list.len) return null;
 
-    for (self.free_list[bucket + 1 ..]) |new_bucket| {
-        if (new_bucket == 0) continue;
+    for (self.free_list[bucket + 1 ..], bucket + 1..) |new_list, new_bucket| {
+        if (new_list == 0) continue;
 
         // becuase we are in the next bucket list there is always enough space
-        const header = mem_slice[new_bucket];
+        const header = mem_slice[new_list];
         assert(header.garbage.is_garbage);
-        return self.allocToGarbage(header, size, bucket_list);
+        return self.allocToGarbage(header, size, new_list, new_bucket);
     }
 
     return null;
 }
 
-fn allocToGarbage(self: *ClauseDb, header: MemCell, size: usize, place: usize) Clause {
+fn allocToGarbage(
+    self: *ClauseDb,
+    header: MemCell,
+    size: usize,
+    place: usize,
+    bucket: usize,
+) Clause {
+    assert(place != 0);
     const mem_slice = self.memory.items;
-    const clause_slice = mem_slice[place .. place + size];
-    clause_slice[0] = .{ .header = .{
-        .is_garbage = false,
-        .len = @intCast(size),
-    } };
+    const garbage_slice = mem_slice[place .. GARBAGE_HEADER_SIZE + place + header.garbage.len];
+    const clause_slice = garbage_slice[0 .. CLAUSE_HEADER_SIZE + size];
+    assert(garbage_slice[0].next == header.next);
+    self.free_list[bucket] = garbage_slice[1].next;
+    self.checkFreeGarbage();
+    clause_slice[0].header = .{ .is_garbage = false, .len = @intCast(size) };
 
     // now that we allocated we can reduce the fragmentation count
-    self.fragmentation -= size + CLAUSE_HEADER_SIZE;
+    self.fragmentation -= clause_slice.len;
     const new_clause = Clause.fromHeader(place);
 
-    if (header.garbage.len <= size + MIN_CLAUSE_SIZE) return new_clause;
+    if (header.garbage.len < clause_slice.len + MIN_CLAUSE_SIZE) return new_clause;
 
-    const garbage_idx = place + size;
-    const garbage_len = header.garbage.len - size - CLAUSE_HEADER_SIZE;
+    const garbage_idx = place + clause_slice.len;
+    const garbage_len = garbage_slice.len - (clause_slice.len + GARBAGE_HEADER_SIZE);
 
     mem_slice[garbage_idx] = .{ .garbage = .{
         .is_garbage = true,
         .len = @intCast(garbage_len),
     } };
 
-    const bucket = getBucket(garbage_len);
-    mem_slice[garbage_idx + 1].next = self.free_list[bucket];
-    self.free_list[bucket] = @intCast(garbage_idx);
+    const new_bucket = getBucket(garbage_slice.len - clause_slice.len - CLAUSE_HEADER_SIZE);
+    mem_slice[garbage_idx + 1].next = self.free_list[new_bucket];
+    self.free_list[new_bucket] = @intCast(garbage_idx);
 
     return new_clause;
 }
@@ -187,7 +221,7 @@ fn allocEnd(self: *ClauseDb, size: u32) !Clause {
     const header = self.memory.items.len;
 
     const clause_slice = try self.memory.addManyAsSlice(size + CLAUSE_HEADER_SIZE);
-    clause_slice[0] = .{ .header = .{ .is_garbage = false, .len = @intCast(size) } };
+    clause_slice[0].header = .{ .is_garbage = false, .len = @intCast(size) };
 
     return Clause.fromHeader(header);
 }

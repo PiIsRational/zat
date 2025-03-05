@@ -2,6 +2,9 @@
 
 ZAT is a simple SAT solver implemented in zig.
 
+## Requierements
+
+* zig == 0.14.0
 
 ## Build
 

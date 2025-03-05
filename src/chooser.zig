@@ -165,9 +165,10 @@ pub fn deinit(self: Chooser) void {
 }
 
 const Position = struct {
-    val: u32 = invalid.val,
+    const invalid_val = std.math.maxInt(u32);
+    pub const invalid: Position = .{ .val = invalid_val };
 
-    pub const invalid = .{ .val = std.math.maxInt(u32) };
+    val: u32 = invalid_val,
 
     pub fn eql(self: Position, other: Position) bool {
         return self.val == other.val;
