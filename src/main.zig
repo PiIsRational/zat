@@ -28,13 +28,13 @@ pub fn main() !void {
     };
 
     const stdout = std.io.getStdOut().writer();
-    try stdout.print("SAT solver\n", .{});
+    try stdout.print("zat sat solver\n", .{});
 
     const args = try std.process.argsAlloc(gpa);
     defer std.process.argsFree(gpa, args);
 
     if (args.len != 2) {
-        try stdout.print("(ERROR) usage: ./SAT Test DPLL.exe <path>", .{});
+        try stdout.print("(ERROR) usage: ./zat <path>", .{});
         std.posix.exit(ERROR_EXIT);
     }
 

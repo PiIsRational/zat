@@ -47,14 +47,14 @@ pub const SatInstance = struct {
         return .{
             .allocator = allocator,
             .setting_order = setting_order,
-            .watch = try WatchList.init(variables, allocator),
-            .chooser = try Chooser.init(allocator, variables),
-            .variables = try Impls.init(allocator, variables),
-            .clauses = try ClauseDb.init(allocator, variables),
-            .learner = try ClauseLearner.init(allocator, variables),
-            .units_to_set = std.ArrayList(UnitSetting).init(allocator),
-            .heuristic = try ClauseHeuristic.init(allocator, variables),
-            .binary_clauses = try BinClauses.init(allocator, variables),
+            .watch = try .init(variables, allocator),
+            .chooser = try .init(allocator, variables),
+            .variables = try .init(allocator, variables),
+            .clauses = try .init(allocator, variables),
+            .learner = try .init(allocator, variables),
+            .units_to_set = .init(allocator),
+            .heuristic = try .init(allocator, variables),
+            .binary_clauses = try .init(allocator, variables),
         };
     }
 
@@ -80,7 +80,12 @@ pub const SatInstance = struct {
     }
 
     /// set `variable` to `state`.
-    pub fn set(self: *Self, variable: usize, state: Variable, reason: Reason) !?Conflict {
+    pub fn set(
+        self: *Self,
+        variable: usize,
+        state: Variable,
+        reason: Reason,
+    ) !?Conflict {
         assert(!state.unassigned());
 
         const var_ptr = self.variables.getVar(variable);
@@ -93,7 +98,7 @@ pub const SatInstance = struct {
 
         self.variables.set(variable, state, reason, self.choice_count);
         try self.setting_order.append(variable);
-        return try self.watch.set(Literal.init(state == .neg, @intCast(variable)), self);
+        return try self.watch.set(.init(state == .neg, @intCast(variable)), self);
     }
 
     pub fn addUnit(self: *Self, unit: UnitSetting) !void {
@@ -221,7 +226,6 @@ pub const SatInstance = struct {
     /// iff returns true the backtracking was successful
     fn resolve(self: *Self, conflict: Conflict) !bool {
         self.conflicts += 1;
-        try self.heuristic.conflict(&self.clauses, &self.watch);
 
         // the current unit clauses did lead to a problem
         for (self.units_to_set.items) |unit| {
@@ -239,6 +243,7 @@ pub const SatInstance = struct {
         else
             self.heuristic.computeGlue(self.*, learned);
 
+        try self.heuristic.conflict(&self.clauses, &self.watch);
         try self.backtrack(backtack_place);
 
         if (flag) {
@@ -292,7 +297,7 @@ pub const SatInstance = struct {
                     clause.setUsed(self.clauses, false);
                     if (curr_glue <= glue) continue;
                     clause.setLbd(self.clauses, curr_glue);
-                    clause.setTier(self.clauses, ClauseTier.fromLbd(curr_glue));
+                    clause.setTier(self.clauses, .fromLbd(curr_glue));
                 },
             }
         }
