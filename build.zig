@@ -60,7 +60,8 @@ pub fn build(b: *std.Build) void {
     }) |tuple| {
         const path, const is_sat = tuple;
 
-        const dir = std.fs.cwd().openDir(path, .{ .iterate = true }) catch unreachable;
+        const base_dir = b.path(path).getPath3(b, test_step);
+        const dir = base_dir.openDir(".", .{ .iterate = true }) catch unreachable;
         var walker = dir.walk(b.allocator) catch unreachable;
         defer walker.deinit();
 
