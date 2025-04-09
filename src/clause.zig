@@ -9,10 +9,6 @@ const SatInstance = @import("sat_instance.zig").SatInstance;
 const ClauseDb = @import("clause_db.zig");
 const WatchList = @import("watch.zig").WatchList;
 
-const MIN_CLAUSE_SIZE = CLAUSE_HEADER_SIZE + MIN_CLAUSE;
-const CLAUSE_HEADER_SIZE: usize = 2;
-const MIN_CLAUSE: usize = 3;
-
 /// the Clause struct.
 ///
 /// it contains the index to the header of the corresponding clause in the clause memory
@@ -36,40 +32,40 @@ pub const Clause = struct {
     }
 
     pub fn getTier(self: Self, db: ClauseDb) ClauseTier {
-        return db.memory.items[self.index + 1].use.tier;
+        return db.getClauseSlice(self)[1].use.tier;
     }
 
     pub fn setTier(self: Self, db: ClauseDb, tier: ClauseTier) void {
-        db.memory.items[self.index + 1].use.tier = tier;
+        db.getClauseSlice(self)[1].use.tier = tier;
     }
 
     pub fn getLbd(self: Self, db: ClauseDb) u16 {
-        return db.memory.items[self.index + 1].use.lbd;
+        return db.getClauseSlice(self)[1].use.lbd;
     }
 
     pub fn setLbd(self: Self, db: ClauseDb, lbd: u16) void {
-        db.memory.items[self.index + 1].use.lbd = lbd;
+        db.getClauseSlice(self)[1].use.lbd = lbd;
     }
 
     pub fn setUsed(self: Self, db: ClauseDb, flag: bool) void {
-        db.memory.items[self.index + 1].use.used = flag;
+        db.getClauseSlice(self)[1].use.used = flag;
     }
 
     pub fn getUsed(self: Self, db: ClauseDb) bool {
-        return db.memory.items[self.index + 1].use.used;
+        return db.getClauseSlice(self)[1].use.used;
     }
 
     pub fn setConflict(self: Self, db: ClauseDb, flag: bool) void {
-        db.memory.items[self.index + 1].use.conflict = flag;
+        db.getClauseSlice(self)[1].use.conflict = flag;
     }
 
     pub fn getConflict(self: Self, db: ClauseDb) bool {
-        return db.memory.items[self.index + 1].use.conflict;
+        return db.getClauseSlice(self)[1].use.conflict;
     }
 
     /// checks if this clause points to garbage in memory
     pub fn isGarbage(self: Self, db: ClauseDb) bool {
-        return db.memory.items[self.index].header.is_garbage;
+        return db.getClauseSlice(self)[0].header.is_garbage;
     }
 
     /// checks if this clause points to nothing
@@ -79,7 +75,7 @@ pub const Clause = struct {
 
     /// getter for the amount of literals in this clause
     pub fn getLength(self: Self, db: ClauseDb) usize {
-        return db.memory.items[self.index].header.len;
+        return db.getClauseSlice(self)[0].header.len;
     }
 
     /// getter for the literals contained in this clause as a const slice
@@ -89,8 +85,8 @@ pub const Clause = struct {
 
     /// getter for the literals as a normal slice
     pub fn getLitsMut(self: Self, db: ClauseDb) []Literal {
-        return @ptrCast(db.memory.items[self.index +
-            CLAUSE_HEADER_SIZE .. self.index + self.getLength(db) + CLAUSE_HEADER_SIZE]);
+        assert(!self.isGarbage(db));
+        return @ptrCast(db.getClauseSlice(self)[ClauseDb.CLAUSE_HEADER_SIZE..]);
     }
 
     /// checks that this clause is satisfied
@@ -226,11 +222,9 @@ pub const ClauseHeuristic = struct {
     pub fn conflict(self: *ClauseHeuristic, db: *ClauseDb, watch: *WatchList) !void {
         self.conflict_count += 1;
 
-        // TODO: fix conflicts
-        if (true) return;
         if (self.conflict_count < self.variables) return;
-        try self.freeLocal(db, watch);
         self.moveMid(db.*, watch);
+        try self.freeLocal(db, watch);
         self.conflict_count = 0;
     }
 
@@ -239,22 +233,13 @@ pub const ClauseHeuristic = struct {
             for (watches.items) |w| {
                 const clause = w.clause;
                 if (clause.getTier(db) != .mid) continue;
-                if (clause.getConflict(db)) continue;
 
-                ClauseHeuristic.stats.mid_count += 1;
-                ClauseHeuristic.stats.mid_tier_update += 1;
+                if (clause.getConflict(db)) {
+                    clause.setConflict(db, false);
+                    continue;
+                }
+
                 clause.setTier(db, .local);
-            }
-        }
-
-        for (watch.watches) |watches| {
-            for (watches.items) |w| {
-                const clause = w.clause;
-                if (clause.getTier(db) != .mid) continue;
-                if (!clause.getConflict(db)) continue;
-
-                ClauseHeuristic.stats.mid_count += 1;
-                clause.setConflict(db, false);
             }
         }
     }
@@ -268,26 +253,20 @@ pub const ClauseHeuristic = struct {
                 i += 1;
 
                 if (clause.isGarbage(db.*)) {
-                    w.* = watches.pop();
+                    w.* = watches.pop().?;
+                    i -= 1;
                     continue;
                 }
-                if (clause.getTier(db.*) == .core) continue;
+                if (clause.getTier(db.*) != .local) continue;
 
                 // the idea is that clauses that have seen some use
-                ClauseHeuristic.stats.local_count += 1;
-                // if (clause.getConflict(db.*) and
-                //   ClauseTier.fromLbd(clause.getLbd(db.*)) == .mid)
-                // {
-                //clause.setTier(db.*, .mid);
-                //  clause.setConflict(db.*, false);
-                //} else
-                if (!clause.getUsed(db.*)) {
-                    ClauseHeuristic.stats.freed_locals += 1;
+                if (clause.getConflict(db.*)) {
+                    clause.setTier(db.*, .mid);
+                    clause.setConflict(db.*, false);
+                } else if (!clause.getUsed(db.*)) {
                     try db.free(clause);
-                    w.* = watches.pop();
+                    w.* = watches.pop().?;
                     i -= 1;
-                } else {
-                    //ClauseHeuristic.stats.local_count -= 1;
                 }
             }
         }

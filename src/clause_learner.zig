@@ -15,11 +15,18 @@ set: std.DynamicBitSet,
 // in the learned clause
 instance_choice_count_lits: usize,
 
+clause_choices: std.DynamicBitSet,
+minimize_stack: std.ArrayList(Literal),
+to_remove: std.ArrayList(usize),
+
 /// initializes the clause learner (`size` is the amount of variables in the instance)
 pub fn init(gpa: Allocator, size: usize) !ClauseLearner {
     return .{
-        .literals = std.ArrayList(Literal).init(gpa),
-        .set = try std.DynamicBitSet.initEmpty(gpa, size),
+        .to_remove = .init(gpa),
+        .clause_choices = try .initEmpty(gpa, size),
+        .literals = .init(gpa),
+        .minimize_stack = .init(gpa),
+        .set = try .initEmpty(gpa, size),
         .instance_choice_count_lits = 0,
     };
 }
@@ -71,6 +78,8 @@ pub fn learn(self: *ClauseLearner, conflict: Conflict, instance: *SatInstance) !
         }
     }
 
+    try self.minimize(instance);
+
     // iterate through all literals which are not of the current choice
     // (which excludes only the first) as they are still set in the set
     for (self.literals.items[1..]) |lit| self.set.unset(lit.toVar());
@@ -109,14 +118,78 @@ fn appendLit(self: *ClauseLearner, lit: Literal, instance: *SatInstance) !void {
     }
 }
 
+pub fn minimize(self: *ClauseLearner, instance: *SatInstance) !void {
+    var i: usize = 1;
+
+    for (self.literals.items) |lit| self.clause_choices.set(lit.toVar());
+
+    outer: while (i < self.literals.items.len) : (i += 1) {
+        const curr = &self.literals.items[i];
+        if (instance.variables.getReason(curr.toVar()).* == .unary) continue;
+
+        self.minimize_stack.clearRetainingCapacity();
+        try self.minimize_stack.append(curr.*);
+
+        while (self.minimize_stack.pop()) |lit| {
+            const reason = instance.variables.getReason(lit.toVar());
+
+            switch (reason.*) {
+                .unary => continue,
+                .binary => |reason_lit| if (try self
+                    .minimizeDfsStep(instance, reason_lit)) continue :outer,
+                .other => |c| for (c.getLiterals(instance.clauses)) |reason_lit| {
+                    if (try self.minimizeDfsStep(instance, reason_lit)) {
+                        continue :outer;
+                    }
+                },
+            }
+        }
+
+        self.set.unset(curr.toVar());
+        curr.* = self.literals.pop().?;
+        i -= 1;
+    }
+
+    for (self.to_remove.items) |v| self.set.unset(v);
+}
+
+pub fn minimizeDfsStep(
+    self: *ClauseLearner,
+    instance: *SatInstance,
+    reason_lit: Literal,
+) !bool {
+    const choice_count = instance.variables.getChoiceCount(reason_lit.toVar()).*;
+
+    if (self.set.isSet(reason_lit.toVar()) or choice_count == 0) return false;
+
+    if (instance.variables.getReason(reason_lit.toVar()).* != .unary and
+        self.clause_choices.isSet(choice_count))
+    {
+        self.set.set(reason_lit.toVar());
+        try self.to_remove.append(reason_lit.toVar());
+        try self.minimize_stack.append(reason_lit);
+        return false;
+    }
+
+    for (self.to_remove.items) |v| self.set.unset(v);
+    self.to_remove.clearRetainingCapacity();
+
+    return true;
+}
+
 pub fn clear(self: *ClauseLearner) void {
     self.literals.clearRetainingCapacity();
+    self.to_remove.clearRetainingCapacity();
+    self.minimize_stack.clearRetainingCapacity();
     self.instance_choice_count_lits = 0;
     assert(self.set.findFirstSet() == null);
 }
 
 pub fn deinit(self: ClauseLearner) void {
+    self.clause_choices.deinit();
+    self.minimize_stack.deinit();
     self.set_in_set.deinit();
+    self.to_remove.deinit();
     self.literals.deinit();
     self.set.deinit();
 }

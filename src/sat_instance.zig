@@ -19,8 +19,8 @@ const ClauseLearner = @import("clause_learner.zig");
 const Chooser = @import("chooser.zig");
 const ClauseHeuristic = @import("clause.zig").ClauseHeuristic;
 const ClauseTier = @import("mem_cell.zig").ClauseTier;
-
-var flag = false;
+const Watch = @import("watch.zig").Watch;
+const Luby = @import("luby.zig");
 
 pub const SatInstance = struct {
     allocator: Allocator,
@@ -34,7 +34,10 @@ pub const SatInstance = struct {
     units_to_set: std.ArrayList(UnitSetting),
     learner: ClauseLearner,
     heuristic: ClauseHeuristic,
+    luby: Luby = .{},
     conflicts: usize = 0,
+    instance_clauses: usize = 0,
+    restarts: usize = 0,
 
     const Self = @This();
 
@@ -47,21 +50,37 @@ pub const SatInstance = struct {
         return .{
             .allocator = allocator,
             .setting_order = setting_order,
-            .watch = try WatchList.init(variables, allocator),
-            .chooser = try Chooser.init(allocator, variables),
-            .variables = try Impls.init(allocator, variables),
-            .clauses = try ClauseDb.init(allocator, variables),
-            .learner = try ClauseLearner.init(allocator, variables),
-            .units_to_set = std.ArrayList(UnitSetting).init(allocator),
-            .heuristic = try ClauseHeuristic.init(allocator, variables),
-            .binary_clauses = try BinClauses.init(allocator, variables),
+            .watch = try .init(variables, allocator),
+            .chooser = try .init(allocator, variables),
+            .variables = try .init(allocator, variables),
+            .clauses = try .init(allocator, variables),
+            .learner = try .init(allocator, variables),
+            .units_to_set = .init(allocator),
+            .heuristic = try .init(allocator, variables),
+            .binary_clauses = try .init(allocator, variables),
         };
     }
 
     pub fn solve(self: *Self) !SatResult {
         self.conflicts = 0;
+        self.instance_clauses = self.clauses.getLength();
 
+        var last_rounds: usize = 0;
+        var luby_step = self.luby.next();
+
+        const stdout = std.io.getStdOut().writer();
         while (true) {
+            if (self.conflicts - last_rounds >= luby_step * 500) {
+                luby_step = self.luby.next();
+                last_rounds = self.conflicts;
+                try self.backtrack(0);
+                self.units_to_set.clearRetainingCapacity();
+                self.restarts += 1;
+            }
+
+            if (self.conflicts != 0 and
+                self.conflicts % 5000 == 0) try self.writeStats(stdout);
+
             while (self.units_to_set.items.len > 0) {
                 const conflict = try self.setUnits();
                 if (conflict) |c| if (!try self.resolve(c)) return .unsat;
@@ -79,8 +98,33 @@ pub const SatInstance = struct {
         }
     }
 
+    pub fn writeStats(self: SatInstance, writer: anytype) !void {
+        try writer.writeAll("c\nc =============== stats ================\n");
+
+        try writer.print("c memory: {d} bytes, garbage: {d} bytes\n", .{
+            self.clauses.memory.items.len * 4,
+            self.clauses.fragmentation * 4,
+        });
+        try writer.print("c conflicts: {d}\n", .{self.conflicts});
+        try writer.print("c alloc from freelist: {d}, alloc from end: {d}\n", .{
+            self.clauses.garbage_alloc,
+            self.clauses.end_alloc,
+        });
+        try writer.print("c restarts: {d}\n", .{self.restarts});
+        try writer.print(
+            "c learned: {d} \n",
+            .{self.clauses.getLength() - self.instance_clauses},
+        );
+        try writer.writeAll("c ======================================\nc\n");
+    }
+
     /// set `variable` to `state`.
-    pub fn set(self: *Self, variable: usize, state: Variable, reason: Reason) !?Conflict {
+    pub fn set(
+        self: *Self,
+        variable: usize,
+        state: Variable,
+        reason: Reason,
+    ) !?Conflict {
         assert(!state.unassigned());
 
         const var_ptr = self.variables.getVar(variable);
@@ -93,7 +137,7 @@ pub const SatInstance = struct {
 
         self.variables.set(variable, state, reason, self.choice_count);
         try self.setting_order.append(variable);
-        return try self.watch.set(Literal.init(state == .neg, @intCast(variable)), self);
+        return try self.watch.set(.init(state == .neg, @intCast(variable)), self);
     }
 
     pub fn addUnit(self: *Self, unit: UnitSetting) !void {
@@ -221,7 +265,6 @@ pub const SatInstance = struct {
     /// iff returns true the backtracking was successful
     fn resolve(self: *Self, conflict: Conflict) !bool {
         self.conflicts += 1;
-        try self.heuristic.conflict(&self.clauses, &self.watch);
 
         // the current unit clauses did lead to a problem
         for (self.units_to_set.items) |unit| {
@@ -239,15 +282,8 @@ pub const SatInstance = struct {
         else
             self.heuristic.computeGlue(self.*, learned);
 
+        try self.heuristic.conflict(&self.clauses, &self.watch);
         try self.backtrack(backtack_place);
-
-        if (flag) {
-            std.debug.print("appending: {{ ", .{});
-            for (learned) |lit| std.debug.print("{s}, ", .{lit});
-            std.debug.print("}}\n", .{});
-        }
-
-        const lbd: u16 = undefined;
 
         const reason: Reason = switch (learned.len) {
             0 => return false,
@@ -257,7 +293,8 @@ pub const SatInstance = struct {
                 break :blk .{ .binary = learned[1] };
             },
             else => blk: {
-                const clause = try self.clauses.addClause(learned, lbd, &self.watch);
+                const clause = try self.clauses
+                    .addClause(learned, learned_glue, &self.watch);
                 clause.setLbd(self.clauses, learned_glue);
                 clause.setTier(self.clauses, ClauseTier.fromLbd(learned_glue));
                 break :blk .{ .other = clause };
@@ -277,7 +314,7 @@ pub const SatInstance = struct {
             const variable = self.variables.get(value);
             if (variable.choice_count == to) break;
 
-            // makes the variable unassigned but keeps it`s fase
+            // makes the variable unassigned but keeps it's phase
             variable.invalidate();
             try self.chooser.append(@intCast(value));
             _ = self.setting_order.pop().?;
@@ -292,7 +329,7 @@ pub const SatInstance = struct {
                     clause.setUsed(self.clauses, false);
                     if (curr_glue <= glue) continue;
                     clause.setLbd(self.clauses, curr_glue);
-                    clause.setTier(self.clauses, ClauseTier.fromLbd(curr_glue));
+                    clause.setTier(self.clauses, .fromLbd(curr_glue));
                 },
             }
         }
