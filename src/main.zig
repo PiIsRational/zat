@@ -28,31 +28,21 @@ pub fn main() !void {
     };
 
     const stdout = std.io.getStdOut().writer();
-    try stdout.print("zat sat solver\n", .{});
+    try stdout.print("c zat sat solver\n", .{});
 
     const args = try std.process.argsAlloc(gpa);
     defer std.process.argsFree(gpa, args);
 
     if (args.len != 2) {
-        try stdout.print("(ERROR) usage: ./zat <path>", .{});
+        try stdout.print("c (ERROR) usage: ./zat <path>", .{});
         std.posix.exit(ERROR_EXIT);
     }
 
     try stdout.print("c FILE: {s}\n", .{args[1]});
     var instance = try InstanceBuilder.loadFromFile(gpa, args[1]);
-    const base_clauses = instance.clauses.getLength();
     var result = try instance.solve();
 
-    try stdout.print("c {d} conflicts\n", .{instance.conflicts});
-    try stdout.print("{s}", .{Watch.stats});
-    try stdout.print(
-        "c {d} learned clauses\n",
-        .{instance.clauses.getLength() - base_clauses},
-    );
-    try stdout.print(
-        "c {d} locals, {d} freed\n",
-        .{ ClauseHeuristic.stats.local_count, ClauseHeuristic.stats.freed_locals },
-    );
+    try instance.writeStats(stdout);
     try stdout.print("s {s}\n", .{result.toString()});
 
     switch (result) {

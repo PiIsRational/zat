@@ -19,6 +19,7 @@ const ClauseLearner = @import("clause_learner.zig");
 const Chooser = @import("chooser.zig");
 const ClauseHeuristic = @import("clause.zig").ClauseHeuristic;
 const ClauseTier = @import("mem_cell.zig").ClauseTier;
+const Watch = @import("watch.zig").Watch;
 
 var flag = false;
 
@@ -35,6 +36,7 @@ pub const SatInstance = struct {
     learner: ClauseLearner,
     heuristic: ClauseHeuristic,
     conflicts: usize = 0,
+    instance_clauses: usize = 0,
 
     const Self = @This();
 
@@ -60,8 +62,16 @@ pub const SatInstance = struct {
 
     pub fn solve(self: *Self) !SatResult {
         self.conflicts = 0;
+        self.instance_clauses = self.clauses.getLength();
 
-        while (true) {
+        var rounds: usize = 0;
+
+        while (true) : (rounds += 1) {
+            if (rounds == 5_000) {
+                try self.writeStats(std.io.getStdOut().writer());
+                rounds = 0;
+            }
+
             while (self.units_to_set.items.len > 0) {
                 const conflict = try self.setUnits();
                 if (conflict) |c| if (!try self.resolve(c)) return .unsat;
@@ -77,6 +87,25 @@ pub const SatInstance = struct {
             const conflict = try self.choose();
             if (conflict) |c| if (!try self.resolve(c)) return .unsat;
         }
+    }
+
+    pub fn writeStats(self: SatInstance, writer: anytype) !void {
+        try writer.writeAll("c\nc =============== stats ================\n");
+
+        try writer.print("c memory: {d} bytes, garbage: {d} bytes\n", .{
+            self.clauses.memory.items.len * 4,
+            self.clauses.fragmentation * 4,
+        });
+        try writer.print("c conflicts: {d}\n", .{self.conflicts});
+        try writer.print("c alloc from freelist: {d}, alloc from end: {d}\n", .{
+            self.clauses.garbage_alloc,
+            self.clauses.end_alloc,
+        });
+        try writer.print(
+            "c learned: {d} \n",
+            .{self.clauses.getLength() - self.instance_clauses},
+        );
+        try writer.writeAll("c ======================================\nc\n");
     }
 
     /// set `variable` to `state`.

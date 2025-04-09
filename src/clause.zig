@@ -222,10 +222,9 @@ pub const ClauseHeuristic = struct {
     pub fn conflict(self: *ClauseHeuristic, db: *ClauseDb, watch: *WatchList) !void {
         self.conflict_count += 1;
 
-        // TODO: fix conflicts
         if (self.conflict_count < self.variables) return;
-        try self.freeLocal(db, watch);
         self.moveMid(db.*, watch);
+        try self.freeLocal(db, watch);
         self.conflict_count = 0;
     }
 
@@ -234,22 +233,13 @@ pub const ClauseHeuristic = struct {
             for (watches.items) |w| {
                 const clause = w.clause;
                 if (clause.getTier(db) != .mid) continue;
-                if (clause.getConflict(db)) continue;
 
-                ClauseHeuristic.stats.mid_count += 1;
-                ClauseHeuristic.stats.mid_tier_update += 1;
+                if (clause.getConflict(db)) {
+                    clause.setConflict(db, false);
+                    continue;
+                }
+
                 clause.setTier(db, .local);
-            }
-        }
-
-        for (watch.watches) |watches| {
-            for (watches.items) |w| {
-                const clause = w.clause;
-                if (clause.getTier(db) != .mid) continue;
-                if (!clause.getConflict(db)) continue;
-
-                ClauseHeuristic.stats.mid_count += 1;
-                clause.setConflict(db, false);
             }
         }
     }
@@ -267,27 +257,20 @@ pub const ClauseHeuristic = struct {
                     i -= 1;
                     continue;
                 }
-                if (clause.getTier(db.*) == .core) continue;
+                if (clause.getTier(db.*) != .local) continue;
 
                 // the idea is that clauses that have seen some use
-                ClauseHeuristic.stats.local_count += 1;
-                // if (clause.getConflict(db.*) and
-                //   ClauseTier.fromLbd(clause.getLbd(db.*)) == .mid)
-                // {
-                //clause.setTier(db.*, .mid);
-                //  clause.setConflict(db.*, false);
-                //} else
-                if (!clause.getUsed(db.*)) {
-                    ClauseHeuristic.stats.freed_locals += 1;
+                if (clause.getConflict(db.*)) {
+                    clause.setTier(db.*, .mid);
+                    clause.setConflict(db.*, false);
+                } else if (!clause.getUsed(db.*)) {
                     try db.free(clause);
                     w.* = watches.pop().?;
                     i -= 1;
-                } else {
-                    //ClauseHeuristic.stats.local_count -= 1;
                 }
             }
         }
 
-        //try db.defragment(watch);
+        try db.defragment(watch);
     }
 };

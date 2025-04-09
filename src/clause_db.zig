@@ -28,6 +28,9 @@ fragmentation: usize = 0,
 clause_count: usize = 0,
 variables: usize,
 
+end_alloc: usize = 0,
+garbage_alloc: usize = 0,
+
 /// the constructor if the clause database
 pub fn init(allocator: Allocator, variables: usize) !ClauseDb {
     // we want to alloc the first block of memory such that a clause
@@ -201,6 +204,7 @@ fn allocToGarbage(
     bucket: usize,
 ) Clause {
     assert(place != 0);
+    self.garbage_alloc += 1;
     const mem_slice = self.memory.items;
     const garbage_slice = self.getGarbageSlice(place);
     const clause_slice = garbage_slice[0 .. CLAUSE_HEADER_SIZE + size];
@@ -236,6 +240,7 @@ fn allocToGarbage(
 fn allocEnd(self: *ClauseDb, size: u32) !Clause {
     assert(size <= std.math.maxInt(u31));
 
+    self.end_alloc += 1;
     const header = self.memory.items.len;
 
     const clause_slice = try self.memory.addManyAsSlice(size + CLAUSE_HEADER_SIZE);
