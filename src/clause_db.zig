@@ -37,7 +37,9 @@ pub fn init(allocator: Allocator, variables: usize) !ClauseDb {
     // with an index of zero can be used equivalently to a null pointer
     var memory = std.ArrayList(MemCell).init(allocator);
     try memory.append(.{ .garbage = .{ .is_garbage = true, .len = 0 } });
-    const free_list = try allocator.alloc(u32, approxLog(variables));
+    const free_list = try allocator
+        .alloc(u32, getBucket(variables + MIN_CLAUSE_LITS));
+
     @memset(free_list, 0);
 
     return .{
@@ -53,7 +55,8 @@ fn approxLog(val: usize) usize {
 }
 
 fn getBucket(clause_len: usize) usize {
-    return approxLog(clause_len - MIN_CLAUSE_LITS);
+    const val = clause_len - MIN_CLAUSE_LITS;
+    return if (val < 20) val / 2 else approxLog(val - 20) + 10;
 }
 
 pub fn getClauseSlice(self: ClauseDb, clause: Clause) []MemCell {
