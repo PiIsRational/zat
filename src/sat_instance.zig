@@ -65,21 +65,24 @@ pub const SatInstance = struct {
         self.conflicts = 0;
         self.instance_clauses = self.clauses.getLength();
 
-        var last_rounds: usize = 0;
+        var last_reset: usize = 0;
+        var last_start: usize = 0;
         var luby_step = self.luby.next();
 
         const stdout = std.io.getStdOut().writer();
         while (true) {
-            if (self.conflicts - last_rounds >= luby_step * 500) {
+            if (self.conflicts - last_reset >= luby_step * 256) {
                 luby_step = self.luby.next();
-                last_rounds = self.conflicts;
+                last_reset = self.conflicts;
                 try self.backtrack(0);
                 self.units_to_set.clearRetainingCapacity();
                 self.restarts += 1;
             }
 
-            if (self.conflicts != 0 and
-                self.conflicts % 5000 == 0) try self.writeStats(stdout);
+            if (self.conflicts - last_start >= 5000) {
+                try self.writeStats(stdout);
+                last_start = self.conflicts;
+            }
 
             while (self.units_to_set.items.len > 0) {
                 const conflict = try self.setUnits();
