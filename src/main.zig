@@ -23,9 +23,7 @@ pub fn main() !void {
         .ReleaseFast, .ReleaseSmall => .{ std.heap.smp_allocator, true },
     };
 
-    defer if (is_debug) {
-        assert(debug_allocator.deinit() == .ok);
-    };
+    defer if (is_debug) assert(debug_allocator.deinit() == .ok);
 
     const stdout = std.io.getStdOut().writer();
     try stdout.print("c zat sat solver\n", .{});

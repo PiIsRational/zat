@@ -20,8 +20,7 @@ const Chooser = @import("chooser.zig");
 const ClauseHeuristic = @import("clause.zig").ClauseHeuristic;
 const ClauseTier = @import("mem_cell.zig").ClauseTier;
 const Watch = @import("watch.zig").Watch;
-
-var flag = false;
+const Luby = @import("luby.zig");
 
 pub const SatInstance = struct {
     allocator: Allocator,
@@ -35,8 +34,10 @@ pub const SatInstance = struct {
     units_to_set: std.ArrayList(UnitSetting),
     learner: ClauseLearner,
     heuristic: ClauseHeuristic,
+    luby: Luby = .{},
     conflicts: usize = 0,
     instance_clauses: usize = 0,
+    restarts: usize = 0,
 
     const Self = @This();
 
@@ -64,13 +65,21 @@ pub const SatInstance = struct {
         self.conflicts = 0;
         self.instance_clauses = self.clauses.getLength();
 
-        var rounds: usize = 0;
+        var last_rounds: usize = 0;
+        var luby_step = self.luby.next();
 
-        while (true) : (rounds += 1) {
-            if (rounds == 5_000) {
-                try self.writeStats(std.io.getStdOut().writer());
-                rounds = 0;
+        const stdout = std.io.getStdOut().writer();
+        while (true) {
+            if (self.conflicts - last_rounds >= luby_step * 500) {
+                luby_step = self.luby.next();
+                last_rounds = self.conflicts;
+                try self.backtrack(0);
+                self.units_to_set.clearRetainingCapacity();
+                self.restarts += 1;
             }
+
+            if (self.conflicts != 0 and
+                self.conflicts % 5000 == 0) try self.writeStats(stdout);
 
             while (self.units_to_set.items.len > 0) {
                 const conflict = try self.setUnits();
@@ -101,6 +110,7 @@ pub const SatInstance = struct {
             self.clauses.garbage_alloc,
             self.clauses.end_alloc,
         });
+        try writer.print("c restarts: {d}\n", .{self.restarts});
         try writer.print(
             "c learned: {d} \n",
             .{self.clauses.getLength() - self.instance_clauses},
@@ -275,14 +285,6 @@ pub const SatInstance = struct {
         try self.heuristic.conflict(&self.clauses, &self.watch);
         try self.backtrack(backtack_place);
 
-        if (flag) {
-            std.debug.print("appending: {{ ", .{});
-            for (learned) |lit| std.debug.print("{s}, ", .{lit});
-            std.debug.print("}}\n", .{});
-        }
-
-        const lbd: u16 = undefined;
-
         const reason: Reason = switch (learned.len) {
             0 => return false,
             1 => .unary,
@@ -291,7 +293,8 @@ pub const SatInstance = struct {
                 break :blk .{ .binary = learned[1] };
             },
             else => blk: {
-                const clause = try self.clauses.addClause(learned, lbd, &self.watch);
+                const clause = try self.clauses
+                    .addClause(learned, learned_glue, &self.watch);
                 clause.setLbd(self.clauses, learned_glue);
                 clause.setTier(self.clauses, ClauseTier.fromLbd(learned_glue));
                 break :blk .{ .other = clause };
@@ -311,7 +314,7 @@ pub const SatInstance = struct {
             const variable = self.variables.get(value);
             if (variable.choice_count == to) break;
 
-            // makes the variable unassigned but keeps it`s fase
+            // makes the variable unassigned but keeps it's phase
             variable.invalidate();
             try self.chooser.append(@intCast(value));
             _ = self.setting_order.pop().?;
