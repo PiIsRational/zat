@@ -17,15 +17,13 @@ pub const SatResult = union(PossibleResults) {
 
     pub fn format(
         self: SatResult,
-        comptime _: []const u8,
-        _: std.fmt.FormatOptions,
-        writer: anytype,
+        writer: *std.io.Writer,
     ) !void {
         switch (self) {
             .sat => |solution| {
                 for (solution.impls, 1..) |var_state, var_num| {
                     if (var_num != 1) try writer.print(" ", .{});
-                    try writer.print("{s}{}", .{ var_state.variable, var_num });
+                    try writer.print("{f}{}", .{ var_state.variable, var_num });
                 }
             },
             .unsat => {},

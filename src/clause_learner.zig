@@ -22,10 +22,10 @@ to_remove: std.ArrayList(usize),
 /// initializes the clause learner (`size` is the amount of variables in the instance)
 pub fn init(gpa: Allocator, size: usize) !ClauseLearner {
     return .{
-        .to_remove = .init(gpa),
+        .to_remove = .{},
         .clause_choices = try .initEmpty(gpa, size),
-        .literals = .init(gpa),
-        .minimize_stack = .init(gpa),
+        .literals = .{},
+        .minimize_stack = .{},
         .set = try .initEmpty(gpa, size),
         .instance_choice_count_lits = 0,
     };
@@ -61,7 +61,7 @@ pub fn learn(self: *ClauseLearner, conflict: Conflict, instance: *SatInstance) !
 
         // check if lit is the last literal of the current choice
         if (self.instance_choice_count_lits == 0) {
-            try self.literals.append(lit.negated());
+            try self.literals.append(instance.gpa, lit.negated());
             const lits = self.literals.items;
 
             // as lit is the first literal in the clause that will be unset
@@ -114,7 +114,7 @@ fn appendLit(self: *ClauseLearner, lit: Literal, instance: *SatInstance) !void {
         // as it will be removed anyways
         self.instance_choice_count_lits += 1;
     } else {
-        try self.literals.append(lit);
+        try self.literals.append(instance.gpa, lit);
     }
 }
 
@@ -128,7 +128,7 @@ pub fn minimize(self: *ClauseLearner, instance: *SatInstance) !void {
         if (instance.variables.getReason(curr.toVar()).* == .unary) continue;
 
         self.minimize_stack.clearRetainingCapacity();
-        try self.minimize_stack.append(curr.*);
+        try self.minimize_stack.append(instance.gpa, curr.*);
 
         while (self.minimize_stack.pop()) |lit| {
             const reason = instance.variables.getReason(lit.toVar());
@@ -166,8 +166,8 @@ pub fn minimizeDfsStep(
         self.clause_choices.isSet(choice_count))
     {
         self.set.set(reason_lit.toVar());
-        try self.to_remove.append(reason_lit.toVar());
-        try self.minimize_stack.append(reason_lit);
+        try self.to_remove.append(instance.gpa, reason_lit.toVar());
+        try self.minimize_stack.append(instance.gpa, reason_lit);
         return false;
     }
 

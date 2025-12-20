@@ -7,15 +7,14 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const main_path = "src/main.zig";
-
-    const exe = b.addExecutable(.{
-        .name = "zat",
+    const mod = b.createModule(.{
         .root_source_file = b.path(main_path),
         .target = target,
         .optimize = optimize,
         .omit_frame_pointer = false,
     });
 
+    const exe = b.addExecutable(.{ .name = "zat", .root_module = mod });
     const options = b.addOptions();
 
     const no_assert = switch (optimize) {
@@ -38,14 +37,8 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&run_cmd.step);
 
     // unit tests
-    const unit_tests = b.addTest(.{
-        .root_source_file = b.path(main_path),
-        .target = target,
-        .optimize = optimize,
-    });
-
+    const unit_tests = b.addTest(.{ .root_module = mod });
     const run_unit_tests = b.addRunArtifact(unit_tests);
-
     const unit_test_step = b.step("unitest", "Run unit tests");
     unit_test_step.dependOn(&run_unit_tests.step);
 

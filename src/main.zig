@@ -25,7 +25,10 @@ pub fn main() !void {
 
     defer if (is_debug) assert(debug_allocator.deinit() == .ok);
 
-    const stdout = std.io.getStdOut().writer();
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
+
     try stdout.print("c zat sat solver\n", .{});
 
     const args = try std.process.argsAlloc(gpa);
@@ -37,18 +40,22 @@ pub fn main() !void {
     }
 
     try stdout.print("c FILE: {s}\n", .{args[1]});
-    var instance = try InstanceBuilder.loadFromFile(gpa, args[1]);
-    var result = try instance.solve();
+    var instance = try InstanceBuilder.loadFromFile(gpa, args[1], stdout);
+    var result = try instance.solve(stdout);
 
     try instance.writeStats(stdout);
     try stdout.print("s {s}\n", .{result.toString()});
 
     switch (result) {
         .sat => {
-            try stdout.print("v {s}\n", .{result});
+            try stdout.print("v {f}\n", .{result});
+            try stdout.flush();
             std.posix.exit(SAT_EXIT);
         },
-        .unsat => std.posix.exit(UNSAT_EXIT),
+        .unsat => {
+            try stdout.flush();
+            std.posix.exit(UNSAT_EXIT);
+        },
     }
 }
 

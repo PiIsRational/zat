@@ -18,19 +18,15 @@ pub fn init(gpa: Allocator, variables: usize) !Chooser {
     const scores = try gpa.alloc(f32, variables);
     @memset(scores, 0);
 
-    var heap = std.ArrayList(u32).init(gpa);
-    try heap.ensureTotalCapacity(variables);
+    var heap: std.ArrayList(u32) = .{};
+    try heap.ensureTotalCapacity(gpa, variables);
 
     for (vars, 0..) |*variable, i| {
         variable.val = @intCast(i);
-        try heap.append(@intCast(i));
+        heap.appendAssumeCapacity(@intCast(i));
     }
 
-    return .{
-        .scores = scores,
-        .heap_position = vars,
-        .var_heap = heap,
-    };
+    return .{ .scores = scores, .heap_position = vars, .var_heap = heap };
 }
 
 pub fn len(self: Chooser) usize {
@@ -60,13 +56,13 @@ pub fn grow(self: *Chooser) void {
     if (self.bump_val >= MAX_BUMP) self.scaleBack();
 }
 
-pub fn append(self: *Chooser, variable: u32) !void {
+pub fn append(self: *Chooser, gpa: Allocator, variable: u32) !void {
     const pos = self.heap_position[variable];
     if (!pos.eql(.invalid)) return;
 
     const new_pos: Position = .{ .val = @intCast(self.var_heap.items.len) };
     self.heap_position[variable] = new_pos;
-    try self.var_heap.append(variable);
+    try self.var_heap.append(gpa, variable);
 
     self.bubbleUp(variable);
 }
@@ -157,11 +153,10 @@ pub fn sinkDown(self: *Chooser, variable: u32) void {
     }
 }
 
-pub fn deinit(self: Chooser) void {
-    const allocator = self.var_heap.allocator;
-    self.var_heap.deinit();
-    allocator.free(self.heap_position);
-    allocator.free(self.scores);
+pub fn deinit(self: *Chooser, gpa: Allocator) void {
+    self.var_heap.deinit(gpa);
+    gpa.free(self.heap_position);
+    gpa.free(self.scores);
 }
 
 const Position = struct {
@@ -179,7 +174,7 @@ test "inout" {
     const gpa = std.testing.allocator;
     const vars = 10;
     var chooser = try Chooser.init(gpa, vars);
-    defer chooser.deinit();
+    defer chooser.deinit(gpa);
 
     for (0..vars) |variable| {
         for (0..variable) |_| chooser.bump(@intCast(variable));
@@ -192,7 +187,7 @@ test "inout" {
         i -%= 1;
     }
 
-    for (0..vars) |variable| try chooser.append(@intCast(variable));
+    for (0..vars) |variable| try chooser.append(gpa, @intCast(variable));
 
     i = 9;
     while (chooser.nextVar()) |variable| {

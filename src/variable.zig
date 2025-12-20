@@ -28,9 +28,7 @@ pub const Variable = enum(u8) {
 
     pub fn format(
         self: Variable,
-        comptime _: []const u8,
-        _: std.fmt.FormatOptions,
-        writer: anytype,
+        writer: *std.io.Writer,
     ) !void {
         if (self == .neg) try writer.print("-", .{});
         if (self.unassigned()) try writer.print("~", .{});

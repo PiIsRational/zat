@@ -17,7 +17,7 @@ pub const MIN_CLAUSE_LITS: usize = 3;
 const ClauseDb = @This();
 
 memory: std.ArrayList(MemCell),
-allocator: Allocator,
+gpa: Allocator,
 
 /// the list containing the freed clauses
 free_list: []u32,
@@ -32,18 +32,17 @@ end_alloc: usize = 0,
 garbage_alloc: usize = 0,
 
 /// the constructor if the clause database
-pub fn init(allocator: Allocator, variables: usize) !ClauseDb {
+pub fn init(gpa: Allocator, variables: usize) !ClauseDb {
     // we want to alloc the first block of memory such that a clause
     // with an index of zero can be used equivalently to a null pointer
-    var memory = std.ArrayList(MemCell).init(allocator);
-    try memory.append(.{ .garbage = .{ .is_garbage = true, .len = 0 } });
-    const free_list = try allocator
-        .alloc(u32, getBucket(variables + MIN_CLAUSE_LITS));
+    var memory: std.ArrayList(MemCell) = .{};
+    try memory.append(gpa, .{ .garbage = .{ .is_garbage = true, .len = 0 } });
+    const free_list = try gpa.alloc(u32, getBucket(variables + MIN_CLAUSE_LITS));
 
     @memset(free_list, 0);
 
     return .{
-        .allocator = allocator,
+        .gpa = gpa,
         .memory = memory,
         .free_list = free_list,
         .variables = variables,
@@ -133,8 +132,8 @@ pub fn free(self: *ClauseDb, clause: Clause) !void {
 
 /// the destructor of the clause database
 pub fn deinit(self: *ClauseDb) void {
-    self.memory.deinit();
-    self.allocator.free(self.free_list);
+    self.memory.deinit(self.gpa);
+    self.gpa.free(self.free_list);
 }
 
 /// the function used to defragment the heap
@@ -142,7 +141,7 @@ pub fn defragment(self: *ClauseDb, watch: *WatchList) !void {
     if (self.fragmentation < self.memory.items.len / 2) return;
 
     var current_self = self.*;
-    self.* = try init(current_self.allocator, current_self.variables);
+    self.* = try init(current_self.gpa, current_self.variables);
 
     for (watch.watches) |watches| {
         for (watches.items) |*w| {
@@ -246,7 +245,8 @@ fn allocEnd(self: *ClauseDb, size: u32) !Clause {
     self.end_alloc += 1;
     const header = self.memory.items.len;
 
-    const clause_slice = try self.memory.addManyAsSlice(size + CLAUSE_HEADER_SIZE);
+    const clause_slice = try self.memory
+        .addManyAsSlice(self.gpa, size + CLAUSE_HEADER_SIZE);
     clause_slice[0].header = .{ .is_garbage = false, .len = @intCast(size) };
 
     return .fromHeader(header);

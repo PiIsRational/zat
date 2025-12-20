@@ -13,7 +13,7 @@ const opts = @import("build_opt");
 
 pub const WatchList = struct {
     watches: []std.ArrayList(Watch),
-    allocator: Allocator,
+    gpa: Allocator,
 
     const Self = @This();
 
@@ -21,17 +21,10 @@ pub const WatchList = struct {
     ///
     /// the initialization does go through each clause and
     /// supposes that no variable in the clause is assigned
-    pub fn init(variables: usize, allocator: Allocator) !Self {
-        const watches = try allocator.alloc(std.ArrayList(Watch), variables * 2);
-
-        for (watches) |*watchlist| {
-            watchlist.* = std.ArrayList(Watch).init(allocator);
-        }
-
-        return .{
-            .watches = watches,
-            .allocator = allocator,
-        };
+    pub fn init(variables: usize, gpa: Allocator) !Self {
+        const watches = try gpa.alloc(std.ArrayList(Watch), variables * 2);
+        for (watches) |*watchlist| watchlist.* = .{};
+        return .{ .watches = watches, .gpa = gpa };
     }
 
     /// sets `literal` to true and checks for unit clauses
@@ -95,7 +88,7 @@ pub const WatchList = struct {
     /// the destructor of the struct
     pub fn deinit(self: *Self) void {
         for (self.watches) |watch| watch.deinit();
-        self.allocator.free(self.watches);
+        self.gpa.free(self.watches);
     }
 
     /// move `watch` from `from` to `to`
@@ -121,7 +114,7 @@ pub const WatchList = struct {
     fn addWatch(self: *Self, literal: Literal, watch: Watch) !void {
         assert(watch.blocking.toIndex() < self.watches.len);
 
-        try self.watches[literal.toIndex()].append(watch);
+        try self.watches[literal.toIndex()].append(self.gpa, watch);
     }
 };
 

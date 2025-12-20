@@ -4,7 +4,7 @@ ZAT is a simple SAT solver implemented in zig.
 
 ## Requierements
 
-* zig == 0.14.0
+* zig == 0.15.1
 
 ## Build
 
@@ -27,4 +27,3 @@ The Features include:
 * eVSIDS and Phase Saving for choosing variables
 * Unit propagation using 2 watched literals.
 * Parsing DIMACS `*.cnf` files and using the standard Protocol for SAT solvers.
-* (Not really a feature) no clause deletion algorithm.
